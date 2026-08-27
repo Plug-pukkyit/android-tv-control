@@ -130,19 +130,33 @@ scrcpy --version
 ไฟล์ apk-repo/versions.json ใช้สำหรับควบคุมเวอร์ชันแอปสตรีมมิ่งที่ต้องการให้ระบบตรวจสอบและแจ้งเตือนอัปเดต:
 
 [
+
   {
+  
     "name": "WeTV (TV)",
+    
     "package": "com.wetv.tv",
+    
     "latestVersion": "3.5.1",
+    
     "apkFileName": "wetv-tv-3.5.1.apk"
+  
   },
+  
   {
+  
     "name": "SmartTube (TV)",
+    
     "package": "com.teamsmart.videomanager.tv",
+    
     "latestVersion": "21.50",
+    
     "apkFileName": "smarttube_beta.apk"
+  
   }
+
 ]
+
 การนำไฟล์ใส่ Repository: วางไฟล์ APK/Zip ลงในโฟลเดอร์ apk-repo/ ให้ชื่อไฟล์ตรงกับคีย์ apkFileName ใน JSON
 
 6. การใช้งานและแก้ปัญหาเบื้องต้น
