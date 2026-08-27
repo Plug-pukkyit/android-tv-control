@@ -30,14 +30,23 @@ sudo npm install -g pm2
 จัดวางโครงสร้างโฟลเดอร์ดังนี้:
 
 /var/www/html/android-tv-control/
+
 ├── server.js               # Backend Node.js
+
 ├── package.json            # Node Dependencies
+
 ├── db.json                 # TV Devices Database
+
 ├── users.json              # Auth Users Database
+
 ├── schedules.json          # Cron Schedules Database
+
 ├── uploads/                # Temporary File Upload Storage
+
 ├── apk-repo/               # Local Repository สำหรับแอปอัปเดต
+
 │   └── versions.json       # Config ควบคุมเวอร์ชันแอป
+
 └── public/                 # Frontend Web Interface
     ├── index.html          # Main Dashboard
     ├── schedule.html       # Schedule Manager UI
