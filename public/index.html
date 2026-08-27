@@ -1,1 +1,1277 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Android TV Remote Screen Controller</title>
+  <style>
+    :root {
+      --bg-dark: #121826;
+      --card-bg: #1b2430;
+      --accent: #00fff5;
+      --primary: #2196f3;
+      --danger: #f44336;
+      --warning: #ff9800;
+      --secondary: #4a5568;
+      --text: #ffffff;
+    }
 
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text);
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .app-container {
+      width: 100%;
+      max-width: 900px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    h2 {
+      margin-top: 0;
+      font-size: 1.2rem;
+      color: var(--accent);
+      border-bottom: 1px solid #2c3a4e;
+      padding-bottom: 10px;
+    }
+
+    .form-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
+
+    input, select {
+      background-color: #121826;
+      border: 1px solid #2c3a4e;
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      flex: 1;
+      min-width: 120px;
+    }
+
+    button {
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    button:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.danger { background-color: var(--danger); }
+    button.warning { background-color: var(--warning); color: #000; }
+    button.secondary { background-color: var(--secondary); }
+
+    .filter-tab {
+      padding: 6px 12px;
+      font-size: 0.8rem;
+      border-radius: 20px;
+      opacity: 0.6;
+      cursor: pointer;
+      border: 1px solid transparent;
+    }
+    .filter-tab.active {
+      opacity: 1;
+      font-weight: bold;
+      border-color: var(--accent);
+      box-shadow: 0 0 8px rgba(0, 255, 245, 0.4);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 12px;
+      border-bottom: 1px solid #2c3a4e;
+    }
+
+    th { color: #a0aec0; font-size: 0.85rem; }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .status-badge.online {
+      background-color: rgba(76, 175, 80, 0.2);
+      color: #81c784;
+      border: 1px solid #4caf50;
+    }
+
+    .status-badge.offline {
+      background-color: rgba(244, 67, 54, 0.2);
+      color: #e57373;
+      border: 1px solid #f44336;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .online .status-dot { background-color: #4caf50; }
+    .offline .status-dot { background-color: #f44336; }
+
+    .screen-wrapper {
+      position: relative;
+      width: 100%;
+      background-color: #000;
+      border-radius: 8px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      border: 2px solid #2c3a4e;
+      min-height: 250px;
+    }
+
+    .screen-canvas {
+      width: 100%;
+      max-height: 500px;
+      object-fit: contain;
+      display: block;
+      cursor: pointer;
+      background-color: #000;
+    }
+
+    .stream-meta-tag {
+      position: absolute;
+      bottom: 8px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      color: #00fff5;
+      pointer-events: none;
+    }
+
+    .dpad-container {
+      display: grid;
+      grid-template-columns: repeat(3, 60px);
+      grid-template-rows: repeat(3, 60px);
+      gap: 8px;
+      justify-content: center;
+      align-items: center;
+      margin: 15px auto;
+    }
+
+    .dpad-btn {
+      width: 100%;
+      height: 100%;
+      padding: 0;
+      font-size: 1.2rem;
+      border-radius: 12px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: #2c3a4e;
+    }
+
+    .dpad-btn.ok-btn {
+      background-color: var(--accent);
+      color: #000;
+      font-weight: bold;
+    }
+
+    .remote-action-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .batch-bar {
+      background: #16213e;
+      border: 1px solid #00fff5;
+      padding: 10px 15px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .progress-bg {
+      background-color: #121826;
+      border-radius: 10px;
+      height: 12px;
+      width: 100%;
+      overflow: hidden;
+      border: 1px solid #2c3a4e;
+      margin-top: 4px;
+    }
+    .progress-fill {
+      height: 100%;
+      background-color: var(--accent);
+      width: 0%;
+      transition: width 0.4s ease;
+    }
+
+    .resource-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 15px;
+      margin-top: 10px;
+    }
+
+    .resource-card {
+      background: #121826;
+      border: 1px solid #2c3a4e;
+      padding: 12px;
+      border-radius: 8px;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.7);
+      justify-content: center;
+      align-items: center;
+      z-index: 999;
+    }
+
+    .modal-content {
+      background: var(--card-bg);
+      padding: 20px;
+      border-radius: 10px;
+      width: 320px;
+    }
+
+    .log-box {
+      background: #0d1117;
+      border: 1px solid #2c3a4e;
+      padding: 10px;
+      border-radius: 6px;
+      height: 90px;
+      font-family: monospace;
+      font-size: 0.8rem;
+      overflow-y: auto;
+      color: #7ee787;
+    }
+  </style>
+</head>
+<body>
+
+<div class="app-container">
+
+  <div style="display: flex; justify-content: space-between; align-items: center; background: #16213e; padding: 12px 20px; border-radius: 10px;">
+    <span>🖥️ <b>Server Address:</b> <code id="serverIpText" style="color: #00fff5;">Loading...</code></span>
+    <div>
+      <span style="font-size: 0.85rem; margin-right: 10px;">User: <b id="loggedInUser" style="color: #00fff5;">Admin</b></span>
+      <button class="secondary" style="padding: 4px 10px; font-size: 0.8rem; background-color: #ff9800; color: #000;" onclick="window.location.href='/schedule.html'">⏰ Schedule Manager</button>
+      <button class="secondary" style="padding: 4px 10px; font-size: 0.8rem; background-color: #673ab7;" onclick="window.location.href='/users.html'">👥 Manage Users</button>
+      <button class="danger" style="padding: 4px 10px; font-size: 0.8rem;" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📺 Manage TV List</h2>
+    <form id="addTvForm" class="form-group">
+      <input type="text" id="addName" placeholder="TV Name" required>
+      <input type="text" id="addIp" placeholder="IP Address" required>
+      <input type="text" id="addPort" placeholder="Port (Default 5555)" value="5555" style="max-width: 150px;">
+      <button type="submit">➕ Add TV</button>
+    </form>
+
+    <div style="display: flex; gap: 10px; margin-top: 15px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between;">
+      <div style="flex: 1; min-width: 200px;">
+        <input type="text" id="searchInput" placeholder="🔍 Search TV Name, IP or Port..." oninput="filterAndRenderTvs()" style="width: 100%; box-sizing: border-box;">
+      </div>
+
+      <div style="display: flex; gap: 6px;">
+        <button type="button" class="filter-tab active" id="btnFilterAll" onclick="setFilter('all')">All (<span id="countAll">0</span>)</button>
+        <button type="button" class="filter-tab" id="btnFilterOnline" onclick="setFilter('online')" style="background-color: #2e7d32;">🟢 Online (<span id="countOnline">0</span>)</button>
+        <button type="button" class="filter-tab" id="btnFilterOffline" onclick="setFilter('offline')" style="background-color: #c62828;">🔴 Offline (<span id="countOffline">0</span>)</button>
+      </div>
+    </div>
+
+    <div class="batch-bar" id="batchBar" style="display: none;">
+      <span style="font-size: 0.9rem;">⚡ <b>Batch Action</b> (<span id="selectedCountText">0</span> Selected):</span>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+        <button class="secondary" style="padding: 4px 10px; font-size: 0.8rem;" onclick="executeBatchAction('HOME')">🏠 Home</button>
+        <button class="warning" style="padding: 4px 10px; font-size: 0.8rem;" onclick="executeBatchAction('OPEN_SETTINGS')">⚙️ Settings</button>
+        <button class="secondary" style="padding: 4px 10px; font-size: 0.8rem; background-color: #5c6bc0;" onclick="executeBatchAction('SLEEP_TV')">🌙 Sleep</button>
+        <button class="secondary" style="padding: 4px 10px; font-size: 0.8rem; background-color: #f57c00;" onclick="executeBatchAction('WAKEUP_TV')">☀️ Wake Up</button>
+        <button class="warning" style="padding: 4px 10px; font-size: 0.8rem; background-color: #2196f3; color: white;" onclick="executeBatchAction('PAIR_REMOTE')">🔵 Pair Remote</button>
+        <button class="danger" style="padding: 4px 10px; font-size: 0.8rem;" onclick="executeBatchAction('CLEAR_ALL_APPS_DATA')">🧹 Reset Apps</button>
+        <button class="danger" style="padding: 4px 10px; font-size: 0.8rem; background-color: #b71c1c;" onclick="executeBatchAction('REBOOT_TV')">🔄 Reboot</button>
+      </div>
+    </div>
+
+    <div style="max-height: 300px; overflow-y: auto; border: 1px solid #2c3a4e; border-radius: 6px;">
+      <table>
+        <thead style="position: sticky; top: 0; background-color: var(--card-bg); z-index: 1;">
+          <tr>
+            <th style="width: 40px; text-align: center;">
+              <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAllTvs(this)">
+            </th>
+            <th>Status</th>
+            <th>Name</th>
+            <th>IP Address : Port</th>
+            <th style="text-align: right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="tvTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🎯 Target Selection & Resource Monitoring</h2>
+    <div class="form-group">
+      <select id="activeTvSelect" onchange="onTvSelectionChange()">
+        <option value="">-- Select TV --</option>
+      </select>
+      <button class="secondary" style="background-color: #673ab7;" onclick="fetchDeviceInfo()">📺 Check Device Brand/Model</button>
+      <button class="secondary" style="background-color: #3f51b5;" onclick="checkCurrentRunningApp()">📱 Check Current Playing App</button>
+      <button class="secondary" onclick="getTvNetworkDetails()">ℹ️ Get Network Info</button>
+      <button class="secondary" style="background-color: #00897b;" onclick="fetchSystemResources()">📊 Check System Resources</button>
+    </div>
+
+    <div id="resourceContainer" style="display: none; margin-top: 15px;">
+      <div class="resource-grid">
+        <div class="resource-card">
+          <div style="display: flex; justify-content: space-between; font-size: 0.85rem;">
+            <span>🧠 <b>RAM Usage:</b></span>
+            <span id="ramText" style="color: #00fff5;">0 MB / 0 MB</span>
+          </div>
+          <div class="progress-bg">
+            <div id="ramBar" class="progress-fill"></div>
+          </div>
+        </div>
+
+        <div class="resource-card">
+          <div style="display: flex; justify-content: space-between; font-size: 0.85rem;">
+            <span>💾 <b>Internal Storage:</b></span>
+            <span id="storageText" style="color: #00fff5;">0 / 0</span>
+          </div>
+          <div class="progress-bg">
+            <div id="storageBar" class="progress-fill"></div>
+          </div>
+        </div>
+
+        <div class="resource-card">
+          <div style="font-size: 0.85rem; margin-bottom: 4px;">📶 <b>Wi-Fi / Network Signal:</b></div>
+          <div style="font-size: 0.85rem; color: #81c784;" id="wifiRssi">Quality: N/A</div>
+          <div style="font-size: 0.8rem; color: #a0aec0;" id="wifiSpeed">Speed: N/A</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+      <h2 style="margin: 0; border: none; padding: 0;">🖥️ Interactive Live Screen Mirroring</h2>
+      <button id="streamBtn" onclick="toggleScreenStream()" class="warning">▶️ Start Live Stream</button>
+    </div>
+
+    <div class="screen-wrapper">
+      <canvas id="tvPlayerCanvas" width="960" height="540" class="screen-canvas" onclick="handleScreenClick(event)"></canvas>
+      <div id="streamTag" class="stream-meta-tag" style="display: none;">🟢 Live Stream Ready</div>
+    </div>
+    <div style="font-size: 0.8rem; color: #a0aec0; margin-top: 8px; text-align: center;">
+      💡 Tip: Click anywhere on the screen above to tap/control the Android TV directly.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🎮 Remote Control & Keypad</h2>
+
+    <div class="dpad-container">
+      <div></div>
+      <button class="dpad-btn" onclick="sendRemoteCmd('UP')">▲</button>
+      <div></div>
+      
+      <button class="dpad-btn" onclick="sendRemoteCmd('LEFT')">◀</button>
+      <button class="dpad-btn ok-btn" onclick="sendRemoteCmd('OK')">OK</button>
+      <button class="dpad-btn" onclick="sendRemoteCmd('RIGHT')">▶</button>
+      
+      <div></div>
+      <button class="dpad-btn" onclick="sendRemoteCmd('DOWN')">▼</button>
+      <div></div>
+    </div>
+
+    <div class="remote-action-grid">
+      <button onclick="sendRemoteCmd('HOME')">🏠 Home</button>
+      <button onclick="sendRemoteCmd('BACK')">↩️ Back</button>
+      <button class="warning" onclick="sendRemoteCmd('OPEN_SETTINGS')">⚙️ Settings</button>
+      
+      <button onclick="sendRemoteCmd('VOLUME_DOWN')">🔉 Vol -</button>
+      <button class="secondary" onclick="sendRemoteCmd('VOLUME_MUTE')">🔇 Mute</button>
+      <button onclick="sendRemoteCmd('VOLUME_UP')">🔊 Vol +</button>
+      
+      <button class="secondary" style="background-color: #5c6bc0;" onclick="sendRemoteCmd('SLEEP_TV')">🌙 Sleep</button>
+      <button class="secondary" style="background-color: #f57c00;" onclick="sendRemoteCmd('WAKEUP_TV')">☀️ Wake Up</button>
+      <button class="warning" style="background-color: #2196f3; color: white;" onclick="sendRemoteCmd('PAIR_REMOTE')">🔵 Pair Remote</button>
+      
+      <button class="secondary" onclick="sendRemoteCmd('SWIPE_UP')">⬆️ Swipe Up</button>
+      <button class="secondary" onclick="sendRemoteCmd('SWIPE_DOWN')">⬇️ Swipe Down</button>
+      <button class="danger" onclick="rebootTv()">🔄 Reboot TV</button>
+    </div>
+
+    <div style="margin-top: 15px;">
+      <div class="log-box" id="logBox">System logs ready...</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📦 APK Installer & App Manager</h2>
+    <form id="uploadApkForm" class="form-group">
+       <input type="file" id="apkFile" accept=".apk,.zip,.xapk,.apks" required style="padding: 6px;">
+       <button type="submit" class="warning" id="installBtn">📲 Upload & Install APK</button>
+    </form>
+    <div style="margin-top: 15px;">
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px;">
+        <button onclick="fetchInstalledApps('user')" class="secondary">🔍 User Apps (-3)</button>
+        <button onclick="fetchInstalledApps('system')" style="background-color: #00897b;">⚙️ System Apps (-s)</button>
+        <button onclick="fetchInstalledApps('all')" style="background-color: #3f51b5;">📱 All Apps (Total)</button>
+        <button onclick="checkPopularAppVersions()" style="background-color: #9c27b0;">📌 Check Streaming Versions</button>
+        <button onclick="checkStreamingUpdates()" style="background-color: #00acc1; font-weight: bold;">🚀 Check & Update Apps</button>
+        <button onclick="clearAllAppsData()" class="danger">🧹 Reset All Apps Data</button>
+      </div>
+      <div id="appListContainer" style="margin-top: 10px; max-height: 250px; overflow-y: auto; background: #0d1117; border-radius: 6px; padding: 10px; border: 1px solid #2c3a4e;">
+        <span style="color: #a0aec0; font-size: 0.85rem;">Click any button above to load app list...</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="modal" id="editModal">
+  <div class="modal-content">
+    <h3 style="margin-top: 0;">Edit TV IP & Port Info</h3>
+    <input type="hidden" id="editId">
+    <div style="display: flex; flex-direction: column; gap: 10px; margin: 15px 0;">
+      <input type="text" id="editName" placeholder="TV Name">
+      <input type="text" id="editIp" placeholder="New IP Address">
+      <input type="text" id="editPort" placeholder="Port (e.g. 5555, 5556)">
+    </div>
+    <div style="display: flex; justify-content: flex-end; gap: 10px;">
+      <button class="secondary" onclick="closeEditModal()">Cancel</button>
+      <button onclick="saveEditTv()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const user = JSON.parse(localStorage.getItem('tv_user') || 'null');
+  if (!user) {
+    window.location.href = '/login.html';
+  } else {
+    document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById('loggedInUser').innerText = `${user.username} (${user.role})`;
+    });
+  }
+
+  function logout() {
+    localStorage.removeItem('tv_user');
+    window.location.href = '/login.html';
+  }
+
+  let socket = null;
+  let tvListCache = [];
+  let currentStatuses = {};
+  let currentFilter = 'all';
+  let selectedTvTargets = new Set();
+  let isStreaming = false;
+  let streamTimer = null;
+
+  const TV_NATIVE_WIDTH = 1920;
+  const TV_NATIVE_HEIGHT = 1080;
+
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const WS_URL = `${protocol}//${window.location.host}`;
+
+  function getSelectedDevice() {
+    const val = document.getElementById('activeTvSelect').value;
+    if (!val) return null;
+    const parts = val.split(':');
+    return { ip: parts[0], port: parts[1] || '5555', target: val };
+  }
+
+  async function fetchServerInfo() {
+    try {
+      const res = await fetch('/api/server-info');
+      const data = await res.json();
+      document.getElementById('serverIpText').innerText = `http://${data.serverIp}:${data.port}`;
+    } catch (err) {
+      document.getElementById('serverIpText').innerText = 'Unknown';
+    }
+  }
+
+  async function fetchTvs() {
+    try {
+      const res = await fetch('/api/tvs');
+      tvListCache = await res.json();
+      filterAndRenderTvs();
+      renderTvSelect();
+    } catch (err) {
+      addLog('Error loading TV list: ' + err.message);
+    }
+  }
+
+  function setFilter(filterType) {
+    currentFilter = filterType;
+    document.querySelectorAll('.filter-tab').forEach(btn => btn.classList.remove('active'));
+    if (filterType === 'all') document.getElementById('btnFilterAll').classList.add('active');
+    if (filterType === 'online') document.getElementById('btnFilterOnline').classList.add('active');
+    if (filterType === 'offline') document.getElementById('btnFilterOffline').classList.add('active');
+    filterAndRenderTvs();
+  }
+
+  function filterAndRenderTvs() {
+    const searchKeyword = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+    let onlineCount = 0;
+    let offlineCount = 0;
+
+    tvListCache.forEach(tv => {
+      const target = `${tv.ip}:${tv.port || '5555'}`;
+      const status = currentStatuses[target] || currentStatuses[tv.ip] || 'offline';
+      if (status === 'online') onlineCount++;
+      else offlineCount++;
+    });
+
+    document.getElementById('countAll').innerText = tvListCache.length;
+    document.getElementById('countOnline').innerText = onlineCount;
+    document.getElementById('countOffline').innerText = offlineCount;
+
+    const filteredTvs = tvListCache.filter(tv => {
+      const target = `${tv.ip}:${tv.port || '5555'}`;
+      const status = currentStatuses[target] || currentStatuses[tv.ip] || 'offline';
+      if (currentFilter === 'online' && status !== 'online') return false;
+      if (currentFilter === 'offline' && status !== 'offline') return false;
+
+      if (searchKeyword) {
+        const matchName = tv.name.toLowerCase().includes(searchKeyword);
+        const matchIp = tv.ip.toLowerCase().includes(searchKeyword);
+        const matchPort = (tv.port || '5555').includes(searchKeyword);
+        if (!matchName && !matchIp && !matchPort) return false;
+      }
+      return true;
+    });
+
+    const tbody = document.getElementById('tvTableBody');
+    if (filteredTvs.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #a0aec0; padding: 20px;">No matching TV devices found.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = filteredTvs.map(tv => {
+      const portText = tv.port || '5555';
+      const target = `${tv.ip}:${portText}`;
+      const status = currentStatuses[target] || currentStatuses[tv.ip] || 'offline';
+      const statusClass = status === 'online' ? 'online' : 'offline';
+      const statusText = status === 'online' ? 'Online' : 'Offline';
+      const isChecked = selectedTvTargets.has(target) ? 'checked' : '';
+
+      return `
+        <tr>
+          <td style="text-align: center;">
+            <input type="checkbox" value="${escapeHtml(target)}" ${isChecked} onchange="toggleTvSelection('${escapeHtml(target)}', this.checked)">
+          </td>
+          <td>
+            <span class="status-badge ${statusClass}">
+              <span class="status-dot"></span>${statusText}
+            </span>
+          </td>
+          <td><b>${escapeHtml(tv.name)}</b></td>
+          <td><code>${escapeHtml(tv.ip)}:${escapeHtml(portText)}</code></td>
+          <td style="text-align: right;">
+            <button class="secondary" style="padding: 4px 8px;" onclick="openEditModal('${tv.id}', '${escapeHtml(tv.name)}', '${escapeHtml(tv.ip)}', '${escapeHtml(portText)}')">✏️ Edit</button>
+            <button class="danger" style="padding: 4px 8px;" onclick="deleteTv('${tv.id}')">🗑️ Delete</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    updateBatchBarUI();
+  }
+
+  function toggleTvSelection(target, checked) {
+    if (checked) selectedTvTargets.add(target);
+    else selectedTvTargets.delete(target);
+    updateBatchBarUI();
+  }
+
+  function toggleSelectAllTvs(masterCheckbox) {
+    const isChecked = masterCheckbox.checked;
+    const checkboxes = document.querySelectorAll('#tvTableBody input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+      cb.checked = isChecked;
+      if (isChecked) selectedTvTargets.add(cb.value);
+      else selectedTvTargets.delete(cb.value);
+    });
+    updateBatchBarUI();
+  }
+
+  function updateBatchBarUI() {
+    const batchBar = document.getElementById('batchBar');
+    const selectedCountText = document.getElementById('selectedCountText');
+    const count = selectedTvTargets.size;
+    selectedCountText.innerText = count;
+    batchBar.style.display = count > 0 ? 'flex' : 'none';
+  }
+
+  function executeBatchAction(action) {
+    if (selectedTvTargets.size === 0) return alert('No TV selected!');
+    const targets = Array.from(selectedTvTargets);
+
+    if (action === 'REBOOT_TV' && !confirm(`⚠️ REBOOT BATCH CONFIRMATION:\nAre you sure you want to REBOOT all ${targets.length} selected TVs?`)) return;
+    if (action === 'CLEAR_ALL_APPS_DATA' && !confirm(`⚠️ RESET APPS BATCH CONFIRMATION:\nAre you sure you want to CLEAR ALL APPS DATA on ${targets.length} selected TVs?`)) return;
+
+    addLog(`⚡ Executing Batch Action [${action}] on ${targets.length} TVs...`);
+    targets.forEach(targetStr => {
+      const parts = targetStr.split(':');
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ action, ip: parts[0], port: parts[1] || '5555' }));
+      }
+    });
+    alert(`Batch command [${action}] sent to ${targets.length} TVs!`);
+  }
+
+  async function fetchDeviceInfo() {
+    const device = getSelectedDevice();
+    if (!device) return alert('Please select a Target TV from the dropdown first!');
+    addLog(`Checking device brand and model for ${device.target}...`);
+
+    try {
+      const res = await fetch(`/api/get-device-info?ip=${device.ip}&port=${device.port}`);
+      const data = await res.json();
+      if (res.ok) {
+        alert(`📺 Target TV: ${device.target}\n🏷️ Brand: ${data.brand}\n🏭 Manufacturer: ${data.manufacturer}\n📱 Model: ${data.model}\n💡 Device Category: ${data.deviceType}`);
+        addLog(`✅ Device Info (${device.target}): ${data.brand} ${data.model} [${data.deviceType}]`);
+      } else {
+        alert('Failed to get device info: ' + (data.error || 'Unknown error'));
+      }
+    } catch (err) {
+      addLog('❌ Fetch device info error: ' + err.message);
+    }
+  }
+
+  async function checkCurrentRunningApp() {
+    const device = getSelectedDevice();
+    if (!device) return alert('Please select a Target TV first!');
+    addLog(`Checking current running app on ${device.target}...`);
+
+    try {
+      const res = await fetch(`/api/get-current-app?ip=${device.ip}&port=${device.port}`);
+      const data = await res.json();
+      if (res.ok) {
+        alert(`📺 TV Target: ${device.target}\n🚀 Currently Playing: ${data.appName}\n📦 Package: ${data.package}`);
+        addLog(`✅ Active App on ${device.target}: ${data.appName} (${data.package})`);
+      } else {
+        alert('Failed to check running app');
+      }
+    } catch (err) {
+      addLog('❌ Check running app error: ' + err.message);
+    }
+  }
+
+  async function fetchSystemResources() {
+    const device = getSelectedDevice();
+    const container = document.getElementById('resourceContainer');
+    if (!device) return alert('Please select a Target TV from the dropdown first!');
+    addLog(`Fetching System Resources for ${device.target}...`);
+
+    try {
+      const res = await fetch(`/api/get-system-resources?ip=${device.ip}&port=${device.port}`);
+      const data = await res.json();
+      if (res.ok) {
+        container.style.display = 'block';
+        const ramPercent = data.ram.percent || 0;
+        document.getElementById('ramText').innerText = `${data.ram.used} / ${data.ram.total} (${ramPercent}%)`;
+        const ramBar = document.getElementById('ramBar');
+        ramBar.style.width = `${ramPercent}%`;
+        ramBar.style.backgroundColor = ramPercent > 85 ? '#f44336' : ramPercent > 65 ? '#ff9800' : '#00fff5';
+
+        const storagePercentVal = parseInt(data.storage.percent.replace('%', '')) || 0;
+        document.getElementById('storageText').innerText = `${data.storage.used} / ${data.storage.size} (${data.storage.percent})`;
+        const storageBar = document.getElementById('storageBar');
+        storageBar.style.width = `${storagePercentVal}%`;
+        storageBar.style.backgroundColor = storagePercentVal > 85 ? '#f44336' : storagePercentVal > 65 ? '#ff9800' : '#00fff5';
+
+        document.getElementById('wifiRssi').innerHTML = `<b>Quality:</b> ${data.wifi.rssi}`;
+        document.getElementById('wifiSpeed').innerHTML = `<b>Speed:</b> ${data.wifi.linkSpeed} (SSID: ${data.wifi.ssid || 'N/A'})`;
+        addLog(`✅ System resources loaded for ${device.target}`);
+      } else {
+        alert('Failed to get resources: ' + (data.details || data.error));
+      }
+    } catch (err) {
+      addLog('❌ Resource fetch error: ' + err.message);
+    }
+  }
+
+  async function checkStreamingUpdates() {
+    const device = getSelectedDevice();
+    const container = document.getElementById('appListContainer');
+    if (!device) return alert('Please select a Target TV first!');
+
+    container.innerHTML = '<span style="color: #ff9800; font-size: 0.85rem;">⌛ Checking for app updates from repository...</span>';
+    addLog(`Checking app updates for ${device.target}...`);
+
+    try {
+      const res = await fetch(`/api/check-app-updates?ip=${device.ip}&port=${device.port}`);
+      const data = await res.json();
+
+      if (!res.ok || data.apps.length === 0) {
+        container.innerHTML = '<span style="color: #a0aec0; font-size: 0.85rem;">No repo versions configured in apk-repo/versions.json</span>';
+        return;
+      }
+
+      container.innerHTML = `
+        <div style="font-size: 0.85rem; color: #81c784; margin-bottom: 8px;"><b>Streaming Apps Update Checker:</b></div>
+        <table style="width: 100%; font-size: 0.85rem;">
+          <thead>
+            <tr>
+              <th>App Name</th>
+              <th>Installed</th>
+              <th>Latest in Repo</th>
+              <th>Status</th>
+              <th style="text-align: right;">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.apps.map(app => `
+              <tr>
+                <td><b>${escapeHtml(app.name)}</b></td>
+                <td><code>${app.installedVersion}</code></td>
+                <td><b style="color: #00fff5;">${app.latestVersion}</b></td>
+                <td>
+                  ${app.hasUpdate 
+                    ? '<span style="color: #ff9800; font-weight: bold;">⚡ Update Available</span>' 
+                    : app.installedVersion === app.latestVersion 
+                      ? '<span style="color: #81c784;">✅ Up to date</span>' 
+                      : '<span style="color: #a0aec0;">Not Installed</span>'}
+                </td>
+                <td style="text-align: right;">
+                  ${app.hasUpdate && app.apkReady 
+                    ? `<button class="warning" style="padding: 2px 8px; font-size: 0.75rem; color: #000;" onclick="installRepoUpdate('${app.apkFileName}')">🚀 Update Now</button>`
+                    : !app.apkReady 
+                      ? '<span style="color: #f44336; font-size: 0.75rem;">APK missing</span>'
+                      : '-'}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+      addLog(`Checked updates for ${device.target}`);
+    } catch (err) {
+      container.innerHTML = `<span style="color: #f44336; font-size: 0.85rem;">Error: ${err.message}</span>`;
+    }
+  }
+
+  async function installRepoUpdate(apkFileName) {
+    const device = getSelectedDevice();
+    if (!device) return;
+    if (!confirm(`Confirm to install and update ${apkFileName} on ${device.target}?`)) return;
+
+    addLog(`Updating ${apkFileName} on ${device.target}... Please wait.`);
+    try {
+      const res = await fetch('/api/apply-app-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip: device.ip, port: device.port, apkFileName })
+      });
+      const result = await res.json();
+      if (res.ok) {
+        alert(`Update successful: ${result.message}`);
+        checkStreamingUpdates();
+      } else {
+        alert(`Update failed: ${result.details || result.error}`);
+      }
+    } catch (err) {
+      alert(`Error: ${err.message}`);
+    }
+  }
+
+  function renderTvSelect() {
+    const select = document.getElementById('activeTvSelect');
+    const currentVal = select.value;
+    if (tvListCache.length === 0) {
+      select.innerHTML = `<option value="">-- No TV Available --</option>`;
+      return;
+    }
+
+    select.innerHTML = tvListCache.map(tv => {
+      const portText = tv.port || '5555';
+      const target = `${tv.ip}:${portText}`;
+      const status = currentStatuses[target] || currentStatuses[tv.ip] || 'offline';
+      const icon = status === 'online' ? '🟢' : '🔴';
+      return `<option value="${target}">${icon} ${tv.name} (${target})</option>`;
+    }).join('');
+
+    if (currentVal && tvListCache.some(t => `${t.ip}:${t.port || '5555'}` === currentVal)) {
+      select.value = currentVal;
+    }
+  }
+
+  function openEditModal(id, name, ip, port) {
+    document.getElementById('editId').value = id;
+    document.getElementById('editName').value = name;
+    document.getElementById('editIp').value = ip;
+    document.getElementById('editPort').value = port || '5555';
+    document.getElementById('editModal').style.display = 'flex';
+  }
+
+  function closeEditModal() {
+    document.getElementById('editModal').style.display = 'none';
+  }
+
+  async function saveEditTv() {
+    const id = document.getElementById('editId').value;
+    const name = document.getElementById('editName').value;
+    const ip = document.getElementById('editIp').value;
+    const port = document.getElementById('editPort').value;
+
+    try {
+      const res = await fetch(`/api/tvs/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, ip, port })
+      });
+      if (res.ok) {
+        closeEditModal();
+        addLog('Updated TV info successfully');
+        fetchTvs();
+      } else {
+        const err = await res.json();
+        alert('Error: ' + err.error);
+      }
+    } catch (err) {
+      addLog('Failed to update TV Info: ' + err.message);
+    }
+  }
+
+  async function getTvNetworkDetails() {
+    const device = getSelectedDevice();
+    if (!device) return alert('Please select a TV first!');
+    addLog(`Fetching network routing info for ${device.target}...`);
+    try {
+      const res = await fetch(`/api/get-tv-network?ip=${device.ip}&port=${device.port}`);
+      const data = await res.json();
+      if (res.ok) {
+        addLog(`🌐 TV Network Details (${device.target}): ${data.routeInfo}`);
+        alert(`Network Route Info for ${device.target}:\n\n${data.routeInfo}`);
+      } else {
+        addLog(`❌ Error: ${data.details || data.error}`);
+      }
+    } catch (err) {
+      addLog('❌ Fetch network error: ' + err.message);
+    }
+  }
+
+  // ==========================================
+  // FAST LIVE SCREEN STREAMING (CANVAS SNAP ENGINE)
+  // ==========================================
+
+  function toggleScreenStream() {
+    const device = getSelectedDevice();
+    const btn = document.getElementById('streamBtn');
+    const tag = document.getElementById('streamTag');
+    if (!device) return alert('Please select a TV first!');
+
+    isStreaming = !isStreaming;
+    if (isStreaming) {
+      btn.innerText = '⏹️ Stop Live Stream';
+      btn.className = 'danger';
+      tag.style.display = 'block';
+      tag.innerHTML = `🟢 Live Stream: ${device.target}`;
+      addLog(`Starting Fast Live Stream for ${device.target}...`);
+      requestNextFrame();
+    } else {
+      btn.innerText = '▶️ Start Live Stream';
+      btn.className = 'warning';
+      tag.style.display = 'none';
+      if (streamTimer) clearTimeout(streamTimer);
+      addLog('Stopped Live Stream.');
+    }
+  }
+
+  function requestNextFrame() {
+    if (!isStreaming) return;
+    const device = getSelectedDevice();
+    if (socket && socket.readyState === WebSocket.OPEN && device) {
+      socket.send(JSON.stringify({ action: 'CAPTURE_SCREEN', ip: device.ip, port: device.port }));
+    }
+  }
+
+  function drawFrameToCanvas(base64Image, timestamp) {
+    const canvas = document.getElementById('tvPlayerCanvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const tag = document.getElementById('streamTag');
+      const device = getSelectedDevice();
+      if (tag && device && isStreaming) {
+        tag.innerHTML = `🟢 Live Stream: ${device.target} (${timestamp || new Date().toLocaleTimeString()})`;
+      }
+    };
+    img.src = base64Image;
+  }
+
+  function handleScreenClick(event) {
+    const device = getSelectedDevice();
+    if (!device) return;
+
+    const canvas = event.target;
+    const rect = canvas.getBoundingClientRect();
+    const clickX = event.clientX - rect.left;
+    const clickY = event.clientY - rect.top;
+
+    const realX = Math.round((clickX / rect.width) * TV_NATIVE_WIDTH);
+    const realY = Math.round((clickY / rect.height) * TV_NATIVE_HEIGHT);
+
+    addLog(`Tapped on TV (${realX}, ${realY})`);
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ action: 'TAP', ip: device.ip, port: device.port, x: realX, y: realY }));
+      if (isStreaming) {
+        setTimeout(requestNextFrame, 150);
+      }
+    }
+  }
+
+  function rebootTv() {
+    const device = getSelectedDevice();
+    if (!device) return alert('Please select a TV first!');
+    if (!confirm(`⚠️ Are you sure you want to REBOOT the Android TV (${device.target})?`)) return;
+
+    addLog(`Sending REBOOT command to ${device.target}...`);
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ action: 'REBOOT_TV', ip: device.ip, port: device.port }));
+      if (isStreaming) toggleScreenStream();
+    }
+  }
+
+  function onTvSelectionChange() {
+    document.getElementById('resourceContainer').style.display = 'none';
+    if (isStreaming) toggleScreenStream();
+    document.getElementById('appListContainer').innerHTML = '<span style="color: #a0aec0; font-size: 0.85rem;">Click any button above to load app list...</span>';
+  }
+
+  document.getElementById('addTvForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('addName').value;
+    const ip = document.getElementById('addIp').value;
+    const port = document.getElementById('addPort').value;
+
+    try {
+      const res = await fetch('/api/tvs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, ip, port })
+      });
+      if (res.ok) {
+        document.getElementById('addName').value = '';
+        document.getElementById('addIp').value = '';
+        document.getElementById('addPort').value = '5555';
+        fetchTvs();
+      }
+    } catch (err) {
+      addLog('Failed to add TV: ' + err.message);
+    }
+  });
+
+  document.getElementById('uploadApkForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const device = getSelectedDevice();
+    const apkFileInput = document.getElementById('apkFile');
+    const installBtn = document.getElementById('installBtn');
+
+    if (!device) return alert('Please select a Target TV from the dropdown first!');
+    if (!apkFileInput.files[0]) return alert('Please choose an APK file!');
+
+    const formData = new FormData();
+    formData.append('ip', device.ip);
+    formData.append('port', device.port);
+    formData.append('apkFile', apkFileInput.files[0]);
+
+    installBtn.disabled = true;
+    installBtn.innerText = '⌛ Installing APK... Please wait';
+    addLog(`Uploading APK and installing to ${device.target}...`);
+
+    try {
+      const res = await fetch('/api/install-apk', { method: 'POST', body: formData });
+      const result = await res.json();
+      if (res.ok) {
+        addLog(`✅ Success: ${result.message}`);
+        alert('APK installed successfully!');
+        apkFileInput.value = '';
+      } else {
+        addLog(`❌ Error: ${result.error} - ${result.details || ''}`);
+        alert('Failed to install APK: ' + (result.details || result.error));
+      }
+    } catch (err) {
+      addLog('❌ Upload/Install error: ' + err.message);
+    } finally {
+      installBtn.disabled = false;
+      installBtn.innerText = '📲 Upload & Install APK';
+    }
+  });
+
+  async function fetchInstalledApps(type = 'user') {
+    const device = getSelectedDevice();
+    const container = document.getElementById('appListContainer');
+    if (!device) return alert('Please select a Target TV from the dropdown first!');
+
+    container.innerHTML = `<span style="color: #ff9800; font-size: 0.85rem;">⌛ Fetching ${type} apps...</span>`;
+    addLog(`Fetching ${type} apps from ${device.target}...`);
+
+    try {
+      const res = await fetch(`/api/get-installed-apps?ip=${device.ip}&port=${device.port}&type=${type}`);
+      const data = await res.json();
+      if (res.ok) {
+        if (data.packages.length === 0) {
+          container.innerHTML = '<span style="color: #a0aec0; font-size: 0.85rem;">No apps found.</span>';
+          return;
+        }
+
+        const typeLabel = type === 'system' ? 'System Apps' : type === 'all' ? 'All Installed Apps' : 'User (Third-Party) Apps';
+        addLog(`✅ Found ${data.total} ${typeLabel} on ${device.target}`);
+        
+        container.innerHTML = `
+          <div style="font-size: 0.85rem; color: #81c784; margin-bottom: 8px;">Total ${typeLabel}: <b>${data.total}</b></div>
+          <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px;">
+            ${data.packages.map(pkg => `
+              <li style="display: flex; justify-content: space-between; align-items: center; background: #1b2430; padding: 6px 10px; border-radius: 4px;">
+                <code style="color: #00fff5; font-size: 0.85rem;">${escapeHtml(pkg)}</code>
+                <div style="display: flex; gap: 6px;">
+                  <button class="danger" style="padding: 2px 8px; font-size: 0.75rem; background-color: #d32f2f;" onclick="forceStopApp('${pkg}')">🛑 Force Stop</button>
+                  <button class="secondary" style="padding: 2px 8px; font-size: 0.75rem;" onclick="checkSingleAppVersion('${pkg}')">🔍 Version</button>
+                  <button class="warning" style="padding: 2px 8px; font-size: 0.75rem; color: #000;" onclick="clearAppData('${pkg}')">🧹 Clear Data</button>
+                  ${type !== 'system' ? `<button class="danger" style="padding: 2px 8px; font-size: 0.75rem;" onclick="uninstallApp('${pkg}')">🗑️ Uninstall</button>` : ''}
+                </div>
+              </li>
+            `).join('')}
+          </ul>
+        `;
+      } else {
+        container.innerHTML = `<span style="color: #f44336; font-size: 0.85rem;">Error: ${data.details || data.error}</span>`;
+      }
+    } catch (err) {
+      container.innerHTML = `<span style="color: #f44336; font-size: 0.85rem;">Error: ${err.message}</span>`;
+    }
+  }
+
+  function forceStopApp(packageName) {
+    const device = getSelectedDevice();
+    if (!device) return;
+    if (!confirm(`Are you sure you want to Force Stop "${packageName}"?`)) return;
+
+    addLog(`Force stopping ${packageName} on ${device.target}...`);
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ action: 'FORCE_STOP_APP', ip: device.ip, port: device.port, package: packageName }));
+    }
+  }
+
+  async function checkPopularAppVersions() {
+  const device = getSelectedDevice();
+  const container = document.getElementById('appListContainer');
+  if (!device) return alert('Please select a Target TV from the dropdown first!');
+
+  container.innerHTML = '<span style="color: #ff9800; font-size: 0.85rem;">⌛ Checking versions for all Streaming Apps...</span>';
+  addLog(`Checking popular app versions on ${device.target}...`);
+
+  const popularApps = [
+    { name: 'WeTV (TV)', pkg: 'com.wetv.tv' },
+    { name: 'Netflix', pkg: 'com.netflix.ninja' },
+    { name: 'HBO Max / Max', pkg: 'com.wbd.stream' },
+    { name: 'Bilibili (TV)', pkg: 'tv.danmaku.bili,com.bilibili.app.in' },
+    { name: 'iQIYI (TV)', pkg: 'com.iqiyi.i18n.tv' },
+    { name: 'YouTube (TV)', pkg: 'com.google.android.youtube.tv' },
+    { name: 'Disney+ (TV)', pkg: 'in.startv.hotstar.dplus.tv' }
+  ];
+
+  try {
+    const results = await Promise.all(popularApps.map(async (app) => {
+      const res = await fetch(`/api/get-app-version?ip=${device.ip}&port=${device.port}&package=${app.pkg}`);
+      const data = await res.json();
+      return { ...app, version: data.versionName || 'Not Installed' };
+    }));
+
+    container.innerHTML = `
+      <div style="font-size: 0.85rem; color: #81c784; margin-bottom: 8px;"><b>Popular Streaming Apps Status:</b></div>
+      <table style="width: 100%; font-size: 0.85rem;">
+        <thead>
+          <tr><th>App Name</th><th>Package Name</th><th>Installed Version</th><th>Quick Action</th></tr>
+        </thead>
+        <tbody>
+          ${results.map(item => `
+            <tr>
+              <td><b>${item.name}</b></td>
+              <td><code>${item.pkg.split(',')[0]}</code></td>
+              <td><span style="color: ${item.version.includes('Not Installed') ? '#f44336' : '#00fff5'}; font-weight: bold;">${item.version}</span></td>
+              <td>
+                ${!item.version.includes('Not Installed') 
+                  ? `<button class="danger" style="padding: 2px 6px; font-size: 0.75rem; background-color: #d32f2f;" onclick="forceStopApp('${item.pkg.split(',')[0]}')">🛑 Force Stop</button>` 
+                  : '<span style="color: #a0aec0;">-</span>'}
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+    addLog(`✅ Checked Streaming Apps versions on ${device.target}`);
+  } catch (err) {
+    container.innerHTML = `<span style="color: #f44336; font-size: 0.85rem;">Error checking versions: ${err.message}</span>`;
+  }
+}
+
+  async function checkSingleAppVersion(pkg) {
+    const device = getSelectedDevice();
+    if (!device) return;
+    try {
+      const res = await fetch(`/api/get-app-version?ip=${device.ip}&port=${device.port}&package=${pkg}`);
+      const data = await res.json();
+      alert(`Package: ${pkg}\nVersion Name: ${data.versionName}`);
+    } catch (err) {
+      alert('Failed to check version: ' + err.message);
+    }
+  }
+
+  function clearAppData(packageName) {
+    const device = getSelectedDevice();
+    if (!device) return;
+    if (!confirm(`Are you sure you want to clear Data and Cache for "${packageName}"?\n(This will log out the user)`)) return;
+
+    addLog(`Clearing Data/Cache for ${packageName} on ${device.target}...`);
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ action: 'CLEAR_APP_DATA', ip: device.ip, port: device.port, package: packageName }));
+    }
+  }
+
+  function clearAllAppsData() {
+    const device = getSelectedDevice();
+    if (!device) return alert('Please select a Target TV first!');
+    if (!confirm(`⚠️ WARNING: Are you sure you want to Clear Data & Cache for ALL third-party apps on ${device.target}?`)) return;
+
+    addLog(`Resetting data for ALL apps on ${device.target}...`);
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ action: 'CLEAR_ALL_APPS_DATA', ip: device.ip, port: device.port }));
+    }
+  }
+
+  async function uninstallApp(packageName) {
+    const device = getSelectedDevice();
+    if (!device) return;
+    if (!confirm(`Are you sure you want to uninstall "${packageName}"?`)) return;
+
+    addLog(`Uninstalling ${packageName} from ${device.target}...`);
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ action: 'UNINSTALL_APP', ip: device.ip, port: device.port, package: packageName }));
+    }
+  }
+
+  async function deleteTv(id) {
+    if (!confirm('Are you sure?')) return;
+    try {
+      const res = await fetch(`/api/tvs/${id}`, { method: 'DELETE' });
+      if (res.ok) fetchTvs();
+    } catch (err) {
+      addLog('Failed to delete TV: ' + err.message);
+    }
+  }
+
+  function initWebSocket() {
+    socket = new WebSocket(WS_URL);
+    
+    socket.onopen = () => addLog('WebSocket Connected');
+    socket.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.action === 'STATUS_UPDATE' && data.statuses) {
+          data.statuses.forEach(item => {
+            const key = item.target || `${item.ip}:${item.port || '5555'}`;
+            currentStatuses[key] = item.status;
+            currentStatuses[item.ip] = item.status;
+          });
+          filterAndRenderTvs();
+          renderTvSelect();
+        } else if (data.action === 'SCREEN_FRAME') {
+          if (data.status === 'success' && data.image) {
+            drawFrameToCanvas(data.image, data.timestamp);
+          }
+          if (isStreaming) {
+            if (streamTimer) clearTimeout(streamTimer);
+            streamTimer = setTimeout(requestNextFrame, 100);
+          }
+        } else {
+          addLog('Response: ' + JSON.stringify(data));
+        }
+      } catch (err) {}
+    };
+
+    socket.onclose = () => {
+      if (isStreaming) toggleScreenStream();
+      setTimeout(initWebSocket, 3000);
+    };
+  }
+
+  function sendRemoteCmd(action) {
+    const device = getSelectedDevice();
+    if (!device) return alert('Please select a TV first!');
+
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ action, ip: device.ip, port: device.port }));
+      addLog(`Sending ${action} to ${device.target}...`);
+      if (isStreaming) {
+        setTimeout(requestNextFrame, 150);
+      }
+    }
+  }
+
+  function addLog(msg) {
+    const logBox = document.getElementById('logBox');
+    logBox.innerHTML += `[${new Date().toLocaleTimeString()}] ${msg}<br>`;
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
+  }
+
+  window.onload = () => {
+    fetchServerInfo();
+    fetchTvs();
+    initWebSocket();
+  };
+</script>
+</body>
+</html>
