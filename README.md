@@ -92,12 +92,14 @@ chmod 644 scrcpy-server.jar
    3.4.2. อัปเดต scrcpy Client บน Ubuntu Server (เลือกวิธีใดวิธีหนึ่ง):
 
 วิธีที่ 1: ผ่าน Snap (แนะนำและสะดวกที่สุด)
+
 # ลบเวอร์ชันเก่าออก
 sudo apt remove -y scrcpy
 
 # ติดตั้งเวอร์ชันล่าสุด
 sudo snap install scrcpy
 วิธีที่ 2: คอมไพล์จาก Source Code (สำหรับเซิร์ฟเวอร์ที่ไม่มี Snap)
+
 # ติดตั้ง Build Dependencies
 sudo apt update
 sudo apt install -y ffmpeg libsdl2-2.0-0 libavcodec-dev libavformat-dev libavutil-dev \
