@@ -58,19 +58,25 @@ sudo npm install -g pm2
     └── login.html          # Auth UI
 
 3.3 ติดตั้ง Dependencies และเริ่มทำงานด้วย PM2
+
 cd /var/www/html/android-tv-control
 
 # ติดตั้ง Dependencies
+
 npm install express ws multer node-cron
 
 # เริ่มต้นระบบด้วย PM2
+
 pm2 start server.js --name "android-tv-control"
 
 # บันทึกสถานะเพื่อให้เปิดอัตโนมัติเมื่อเซิร์ฟเวอร์ Reboot
+
 pm2 save
+
 pm2 startup
 
 3.4 ติดตั้ง scrcpy-server และ scrcpy Client (เวอร์ชันล่าสุด)
+
 ระบบจำเป็นต้องใช้ scrcpy-server.jar เพื่อรองรับการจัดการสตรีมวิดีโอระดับฮาร์ดแวร์บน Android 10 - 14:
 
    3.4.1. ดาวน์โหลด scrcpy-server.jar เข้าสู่โฟลเดอร์โปรเจกต์:
