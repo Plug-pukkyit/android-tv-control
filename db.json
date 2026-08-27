@@ -1,0 +1,20 @@
+[
+  {
+    "id": "bbfdc9b3127bc385",
+    "name": "Signage TV - Box Android 8E",
+    "ip": "172.30.60.11",
+    "port": "5010"
+  },
+  {
+    "id": "e9af89733df6d6be",
+    "name": "Signage Player Sharp 55",
+    "ip": "172.30.60.11",
+    "port": "5011"
+  },
+  {
+    "id": "3b87a3a03dd8c84b",
+    "name": "AndroidBox blood Floor 1D",
+    "ip": "192.168.88.219",
+    "port": "5555"
+  }
+]

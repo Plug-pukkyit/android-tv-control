@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@devicefarmer/adbkit": "^3.3.9",
+    "express": "^5.2.1",
+    "multer": "^2.2.0",
+    "tp-link-tapo-connect": "^2.0.15",
+    "ws": "^8.21.2"
+  }
+}
