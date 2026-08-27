@@ -45,7 +45,7 @@ sudo npm install -g pm2
 
 ├── apk-repo/               # Local Repository สำหรับแอปอัปเดต
 
-│   └── versions.json       # Config ควบคุมเวอร์ชันแอป
+    └── versions.json       # Config ควบคุมเวอร์ชันแอป
 
 └── public/                 # Frontend Web Interface
     ├── index.html          # Main Dashboard
