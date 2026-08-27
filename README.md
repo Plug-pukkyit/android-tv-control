@@ -146,4 +146,8 @@ scrcpy --version
 เปิด YouTube แล้วเป็นจอดำ	ติดสิทธิ์ Secure Surface / FLAG_SECURE	สลับไปใช้แอป SmartTube หรือเปิด "Disable HW overlays" บนกล่อง
 Split APKs ติดตั้งไม่ผ่าน	ไฟล์ขาด base.apk หรือ config เฉพาะชิป	บีบอัดไฟล์ Split APKs เป็น .zip แล้วโยนผ่านฟังก์ชัน Upload & Install
 
+เข้าใช้งาน http://ipเครื่องหรือlocalhost:8889
+user: admin
+pass: P@ssw0rd123
 
+User Password ตั้งต้นอยู่ที่ users.json
