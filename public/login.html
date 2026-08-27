@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Android TV Controller</title>
+  <style>
+    :root {
+      --bg-dark: #121826;
+      --card-bg: #1b2430;
+      --accent: #00fff5;
+      --primary: #2196f3;
+      --danger: #f44336;
+      --text: #ffffff;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text);
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .login-card {
+      background-color: var(--card-bg);
+      border-radius: 12px;
+      padding: 30px;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+      border: 1px solid #2c3a4e;
+    }
+
+    h2 {
+      margin-top: 0;
+      color: var(--accent);
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .form-control {
+      margin-bottom: 15px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.85rem;
+      color: #a0aec0;
+    }
+
+    input {
+      width: 100%;
+      background-color: #121826;
+      border: 1px solid #2c3a4e;
+      color: #fff;
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      box-sizing: border-box;
+    }
+
+    button {
+      width: 100%;
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      padding: 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 1rem;
+      margin-top: 10px;
+    }
+
+    button:hover { opacity: 0.9; }
+
+    .error-msg {
+      color: var(--danger);
+      font-size: 0.85rem;
+      margin-top: 10px;
+      text-align: center;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<div class="login-card">
+  <h2>🔒 TV Remote Login</h2>
+  <form id="loginForm">
+    <div class="form-control">
+      <label>Username</label>
+      <input type="text" id="username" placeholder="Enter username" required>
+    </div>
+    <div class="form-control">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="Enter password" required>
+    </div>
+    <button type="submit">Sign In</button>
+    <div class="error-msg" id="errorMsg">Invalid username or password</div>
+  </form>
+</div>
+
+<script>
+  // หากเลกอินอยู่แล้วให้เด้งไปหน้า index.html
+  if (localStorage.getItem('tv_user')) {
+    window.location.href = '/index.html';
+  }
+
+  document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    const errorMsg = document.getElementById('errorMsg');
+
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        localStorage.setItem('tv_user', JSON.stringify({ username: data.username, role: data.role }));
+        window.location.href = '/index.html';
+      } else {
+        errorMsg.innerText = data.error || 'Login failed';
+        errorMsg.style.display = 'block';
+      }
+    } catch (err) {
+      errorMsg.innerText = 'Server error: ' + err.message;
+      errorMsg.style.display = 'block';
+    }
+  });
+</script>
+
+</body>
+</html>

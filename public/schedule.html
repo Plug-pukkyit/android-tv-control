@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Schedule Manager - Android TV Controller</title>
+  <style>
+    :root {
+      --bg-dark: #121826;
+      --card-bg: #1b2430;
+      --accent: #00fff5;
+      --primary: #2196f3;
+      --danger: #f44336;
+      --warning: #ff9800;
+      --secondary: #4a5568;
+      --text: #ffffff;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text);
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .app-container {
+      width: 100%;
+      max-width: 850px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    h2 {
+      margin-top: 0;
+      font-size: 1.2rem;
+      color: var(--accent);
+      border-bottom: 1px solid #2c3a4e;
+      padding-bottom: 10px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 15px;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    input, select {
+      background-color: #121826;
+      border: 1px solid #2c3a4e;
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      flex: 1;
+      min-width: 150px;
+    }
+
+    button {
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    button.danger { background-color: var(--danger); }
+    button.warning { background-color: var(--warning); color: #000; }
+    button.secondary { background-color: var(--secondary); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 12px;
+      border-bottom: 1px solid #2c3a4e;
+    }
+
+    th { color: #a0aec0; font-size: 0.85rem; }
+
+    .tv-checkbox-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 8px;
+      max-height: 180px;
+      overflow-y: auto;
+      background: #121826;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #2c3a4e;
+    }
+
+    .tv-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.85rem;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 40px;
+      height: 22px;
+    }
+
+    .switch input { opacity: 0; width: 0; height: 0; }
+
+    .slider {
+      position: absolute; cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #4a5568;
+      transition: .3s;
+      border-radius: 22px;
+    }
+
+    .slider:before {
+      position: absolute; content: "";
+      height: 16px; width: 16px;
+      left: 3px; bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider { background-color: #4caf50; }
+    input:checked + .slider:before { transform: translateX(18px); }
+  </style>
+</head>
+<body>
+
+<div class="app-container">
+
+  <!-- Header -->
+  <div style="display: flex; justify-content: space-between; align-items: center; background: #16213e; padding: 12px 20px; border-radius: 10px;">
+    <span>⏰ <b>Auto Sleep / Wake Up Schedule</b></span>
+    <div>
+      <button class="secondary" onclick="window.location.href='/index.html'">📺 Back to TV Controller</button>
+      <button class="danger" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <!-- Create Schedule Form -->
+  <div class="card">
+    <h2>➕ Create Power Schedule</h2>
+    <form id="addScheduleForm" class="form-group">
+      
+      <div class="form-row">
+        <input type="text" id="schTitle" placeholder="Schedule Name (e.g., Turn off all TVs at night)" required>
+        <select id="schAction" style="max-width: 180px;">
+          <option value="SLEEP_TV">🌙 Sleep (พักจอ)</option>
+          <option value="WAKEUP_TV">☀️ Wake Up (ปลุกจอ)</option>
+        </select>
+      </div>
+
+      <div class="form-row">
+        <select id="schType" onchange="onTypeChange()" style="max-width: 180px;">
+          <option value="daily">รายวัน (Daily)</option>
+          <option value="once">1 ครั้ง (Once)</option>
+          <option value="monthly">รายเดือน (Monthly)</option>
+          <option value="yearly">รายปี (Yearly)</option>
+        </select>
+
+        <input type="time" id="schTime" required>
+
+        <!-- Dynamic Inputs -->
+        <input type="date" id="schDate" style="display: none;">
+        
+        <select id="schDayOfMonth" style="display: none;">
+          ${Array.from({length: 31}, (_, i) => `<option value="${i+1}">วันที่ ${i+1}</option>`).join('')}
+        </select>
+
+        <select id="schMonthOfYear" style="display: none;">
+          <option value="1">มกราคม (Jan)</option>
+          <option value="2">กุมภาพันธ์ (Feb)</option>
+          <option value="3">มีนาคม (Mar)</option>
+          <option value="4">เมษายน (Apr)</option>
+          <option value="5">พฤษภาคม (May)</option>
+          <option value="6">มิถุนายน (Jun)</option>
+          <option value="7">กรกฎาคม (Jul)</option>
+          <option value="8">สิงหาคม (Aug)</option>
+          <option value="9">กันยายน (Sep)</option>
+          <option value="10">ตระลาคม (Oct)</option>
+          <option value="11">พฤศจิกายน (Nov)</option>
+          <option value="12">ธันวาคม (Dec)</option>
+        </select>
+      </div>
+
+      <!-- TV Selection Grid -->
+      <label style="font-size: 0.85rem; color: #a0aec0; margin-top: 5px;">
+        🎯 Select Target TVs: 
+        <a href="#" onclick="selectAllTvs(true); return false;" style="color: var(--accent); margin-left: 10px;">Select All</a> | 
+        <a href="#" onclick="selectAllTvs(false); return false;" style="color: #a0aec0;">Deselect All</a>
+      </label>
+      
+      <div class="tv-checkbox-grid" id="tvCheckboxGrid">
+        <span style="color: #a0aec0;">Loading TVs...</span>
+      </div>
+
+      <button type="submit" style="margin-top: 10px; background-color: var(--accent); color: #000; font-weight: bold;">💾 Save Schedule</button>
+    </form>
+  </div>
+
+  <!-- Schedules List -->
+  <div class="card">
+    <h2>📋 Existing Schedules</h2>
+    <div style="overflow-x: auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Title</th>
+            <th>Action</th>
+            <th>Repeat / Timing</th>
+            <th>Time</th>
+            <th>Target TVs</th>
+            <th style="text-align: right;">Action</th>
+          </tr>
+        </thead>
+        <tbody id="scheduleTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const user = JSON.parse(localStorage.getItem('tv_user') || 'null');
+  if (!user) window.location.href = '/login.html';
+
+  let tvList = [];
+
+  function onTypeChange() {
+    const type = document.getElementById('schType').value;
+    document.getElementById('schDate').style.display = type === 'once' ? 'block' : 'none';
+    document.getElementById('schDayOfMonth').style.display = (type === 'monthly' || type === 'yearly') ? 'block' : 'none';
+    document.getElementById('schMonthOfYear').style.display = type === 'yearly' ? 'block' : 'none';
+  }
+
+  async function loadTvs() {
+    try {
+      const res = await fetch('/api/tvs');
+      tvList = await res.json();
+      const grid = document.getElementById('tvCheckboxGrid');
+
+      if (tvList.length === 0) {
+        grid.innerHTML = '<span style="color: #a0aec0;">No TVs found in database.</span>';
+        return;
+      }
+
+      grid.innerHTML = tvList.map(tv => {
+        const target = `${tv.ip}:${tv.port || '5555'}`;
+        return `
+          <div class="tv-item">
+            <input type="checkbox" class="tv-sch-cb" value="${target}" id="cb-${tv.id}">
+            <label for="cb-${tv.id}">${escapeHtml(tv.name)} (${tv.ip})</label>
+          </div>
+        `;
+      }).join('');
+    } catch (err) {
+      alert('Error loading TV list: ' + err.message);
+    }
+  }
+
+  function selectAllTvs(checked) {
+    document.querySelectorAll('.tv-sch-cb').forEach(cb => cb.checked = checked);
+  }
+
+  async function loadSchedules() {
+    try {
+      const res = await fetch('/api/schedules');
+      const data = await res.json();
+      const tbody = document.getElementById('scheduleTableBody');
+
+      if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#a0aec0;">No schedules configured.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = data.map(item => {
+        let repeatText = 'Daily';
+        if (item.type === 'once') repeatText = `Once (${item.date})`;
+        else if (item.type === 'monthly') repeatText = `Monthly (Day ${item.dayOfMonth})`;
+        else if (item.type === 'yearly') repeatText = `Yearly (Day ${item.dayOfMonth}/${item.monthOfYear})`;
+
+        const actionText = item.action === 'SLEEP_TV' ? '🌙 Sleep' : '☀️ Wake Up';
+        const actionColor = item.action === 'SLEEP_TV' ? '#5c6bc0' : '#f57c00';
+
+        return `
+          <tr>
+            <td>
+              <label class="switch">
+                <input type="checkbox" ${item.enabled ? 'checked' : ''} onchange="toggleSchedule('${item.id}')">
+                <span class="slider"></span>
+              </label>
+            </td>
+            <td><b>${escapeHtml(item.title)}</b></td>
+            <td><span style="color: ${actionColor}; font-weight: bold;">${actionText}</span></td>
+            <td><code>${repeatText}</code></td>
+            <td><b>${item.time}</b></td>
+            <td><span style="color: #00fff5;">${item.targetTvs.length} TVs</span></td>
+            <td style="text-align: right;">
+              <button class="danger" style="padding: 4px 8px;" onclick="deleteSchedule('${item.id}')">🗑️ Delete</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    } catch (err) {
+      alert('Error loading schedules: ' + err.message);
+    }
+  }
+
+  document.getElementById('addScheduleForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const selectedTvs = Array.from(document.querySelectorAll('.tv-sch-cb:checked')).map(cb => cb.value);
+    if (selectedTvs.length === 0) return alert('Please select at least one TV!');
+
+    const payload = {
+      title: document.getElementById('schTitle').value,
+      action: document.getElementById('schAction').value,
+      type: document.getElementById('schType').value,
+      time: document.getElementById('schTime').value,
+      date: document.getElementById('schDate').value,
+      dayOfMonth: document.getElementById('schDayOfMonth').value,
+      monthOfYear: document.getElementById('schMonthOfYear').value,
+      targetTvs: selectedTvs
+    };
+
+    try {
+      const res = await fetch('/api/schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        document.getElementById('schTitle').value = '';
+        loadSchedules();
+      } else {
+        const err = await res.json();
+        alert('Error: ' + err.error);
+      }
+    } catch (err) {
+      alert('Failed to save schedule: ' + err.message);
+    }
+  });
+
+  async function toggleSchedule(id) {
+    await fetch(`/api/schedules/${id}/toggle`, { method: 'PUT' });
+    loadSchedules();
+  }
+
+  async function deleteSchedule(id) {
+    if (!confirm('Are you sure you want to delete this schedule?')) return;
+    await fetch(`/api/schedules/${id}`, { method: 'DELETE' });
+    loadSchedules();
+  }
+
+  function logout() {
+    localStorage.removeItem('tv_user');
+    window.location.href = '/login.html';
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
+  }
+
+  window.onload = () => {
+    // Populate Day of Month select options
+    const daySelect = document.getElementById('schDayOfMonth');
+    daySelect.innerHTML = Array.from({length: 31}, (_, i) => `<option value="${i+1}">วันที่ ${i+1}</option>`).join('');
+
+    onTypeChange();
+    loadTvs();
+    loadSchedules();
+  };
+</script>
+
+</body>
+</html>

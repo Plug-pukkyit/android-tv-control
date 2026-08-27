@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Installation & User Guide - Android TV Control System</title>
+  <style>
+    :root {
+      --bg-main: #0d1117;
+      --card-bg: #161b22;
+      --sidebar-bg: #121826;
+      --accent: #00fff5;
+      --primary: #2196f3;
+      --success: #81c784;
+      --warning: #ff9800;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --border: #30363d;
+      --code-bg: #090d13;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background-color: var(--bg-main);
+      color: var(--text);
+      margin: 0;
+      display: flex;
+      line-height: 1.6;
+    }
+
+    /* Sidebar Navigation */
+    .sidebar {
+      width: 260px;
+      background-color: var(--sidebar-bg);
+      border-right: 1px solid var(--border);
+      height: 100vh;
+      position: sticky;
+      top: 0;
+      padding: 20px;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+    .sidebar h3 {
+      color: var(--accent);
+      font-size: 1.1rem;
+      margin-top: 0;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+    }
+    .sidebar ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .sidebar li { margin-bottom: 8px; }
+    .sidebar a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.2s;
+      display: block;
+      padding: 6px 10px;
+      border-radius: 6px;
+    }
+    .sidebar a:hover {
+      color: var(--accent);
+      background: rgba(0, 255, 245, 0.05);
+    }
+
+    /* Content Area */
+    .main-content {
+      flex: 1;
+      max-width: 960px;
+      padding: 40px;
+    }
+    h1 {
+      color: var(--accent);
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 15px;
+      margin-top: 0;
+    }
+    h2 {
+      color: #58a6ff;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+      margin-top: 40px;
+    }
+    h3 { color: #f0883e; margin-top: 20px; }
+
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    pre {
+      background-color: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px;
+      overflow-x: auto;
+      color: #7ee787;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 0.9rem;
+    }
+    code {
+      background-color: var(--code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #00fff5;
+      font-family: monospace;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15px 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      text-align: left;
+    }
+    th {
+      background-color: #21262d;
+      color: #f0f6fc;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: bold;
+    }
+    .badge.success { background: rgba(76, 175, 80, 0.2); color: var(--success); border: 1px solid #4caf50; }
+    .badge.warning { background: rgba(255, 152, 0, 0.2); color: var(--warning); border: 1px solid #ff9800; }
+    .badge.info { background: rgba(33, 150, 243, 0.2); color: #64b5f6; border: 1px solid #2196f3; }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation Sidebar -->
+  <div class="sidebar">
+    <h3>📖 Navigation</h3>
+    <ul>
+      <li><a href="#overview">1. ภาพรวมระบบ</a></li>
+      <li><a href="#prerequisites">2. สิ่งที่ต้องเตรียม (Prerequisites)</a></li>
+      <li><a href="#server-setup">3. การติดตั้งฝั่ง Linux Server</a></li>
+      <li><a href="#device-setup">4. การตั้งค่าตัวกล่อง Android TV</a></li>
+      <li><a href="#repo-setup">5. การตั้งค่าคลังอัปเดตแอป (Repo)</a></li>
+      <li><a href="#usage-guide">6. การใช้งานและแก้ปัญหาเบื้องต้น</a></li>
+      <li><a href="#api-summary">7. สรุปพอร์ตและ Endpoint</a></li>
+    </ul>
+  </div>
+
+  <!-- Main Content Body -->
+  <div class="main-content">
+    <h1>📱 คู่มือติดตั้งระบบ Android TV Control Management</h1>
+    <p>ระบบบริหารจัดการและควบคุมกล่อง Android TV จากระยะไกลผ่านเว็บแดชบอร์ด รองรับทั้งระบบกล่อง ZTE, Homatics (Android 10/14) และ LDPlayer Emulator</p>
+
+    <!-- Overview Section -->
+    <div id="overview" class="card">
+      <h2>1. ภาพรวมระบบและโครงสร้างสถาปัตยกรรม</h2>
+      <ul>
+        <li><b>Live Screen Engine:</b> สตรีมหน้าจอความเร็วสูงแบบ Realtime Canvas Stream ผ่าน WebSocket (Latency ต่ำ รองรับการควบคุมคลิกหน้าจอสด)</li>
+        <li><b>ADB Multi-Management:</b> จัดการ Batch Command เช่น Home, Settings, Reboot, Sleep/Wakeup และ Bluetooth Pairing บน ZTE</li>
+        <li><b>App & Split APKs Installer:</b> รองรับการติดตั้งและอัปเดตทั้งไฟล์เดี่ยว <code>.apk</code> และไฟล์ Split APKs (<code>.zip</code>, <code>.xapk</code>, <code>.apks</code>) ด้วย <code>install-multiple</code></li>
+        <li><b>Schedule Cron Engine:</b> ตั้งเวลาทำงานล่วงหน้าตามวัน/เดือน/ปี หรือแบบ Loop ประจำวัน</li>
+      </ul>
+    </div>
+
+    <!-- Prerequisites -->
+    <div id="prerequisites" class="card">
+      <h2>2. สิ่งที่ต้องเตรียม (Prerequisites)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>องค์ประกอบ</th>
+            <th>เวอร์ชัน / สเปกขั้นต่ำ</th>
+            <th>หมายเหตุ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>Operating System</b></td>
+            <td>Ubuntu 20.04 / 22.04 LTS</td>
+            <td>Headless / Cloud Server หรือเครื่อง On-Premises</td>
+          </tr>
+          <tr>
+            <td><b>Node.js Environment</b></td>
+            <td>Node.js v16.x - v20.x + NPM</td>
+            <td>ใช้รัน Express & WebSocket Engine</td>
+          </tr>
+          <tr>
+            <td><b>Android Platform Tools</b></td>
+            <td>ADB Version 30.0.0+</td>
+            <td>สำหรับสั่งการ Protocol ไปยังกล่อง Android</td>
+          </tr>
+          <tr>
+            <td><b>Process Manager</b></td>
+            <td>PM2 (Production Process Manager)</td>
+            <td>สำหรับสั่งรัน Background Service อัตโนมัติ</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Server Setup -->
+    <div id="server-setup" class="card">
+      <h2>3. การติดตั้งฝั่ง Linux Server</h2>
+      
+      <h3>3.1 ติดตั้งโปรแกรมและเครื่องมือจำเป็น</h3>
+      <pre><code># อัปเดต Package และลงเครื่องมือพื้นฐาน
+sudo apt update && sudo apt install -y curl wget unzip adb git
+
+# ติดตั้ง Node.js (v18 LTS)
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# ติดตั้ง PM2 สำหรับดูแลระบบ
+sudo npm install -g pm2</code></pre>
+
+      <h3>3.2 โครงสร้างไดเรกทอรีโปรเจกต์</h3>
+      <p>จัดวางโครงสร้างโฟลเดอร์ดังนี้:</p>
+      <pre><code>/var/www/html/android-tv-control/
+├── server.js               # Backend Node.js
+├── package.json            # Node Dependencies
+├── db.json                 # TV Devices Database
+├── users.json              # Auth Users Database
+├── schedules.json          # Cron Schedules Database
+├── uploads/                # Temporary File Upload Storage
+├── apk-repo/               # Local Repository สำหรับแอปอัปเดต
+│   └── versions.json       # Config ควบคุมเวอร์ชันแอป
+└── public/                 # Frontend Web Interface
+    ├── index.html          # Main Dashboard
+    ├── schedule.html       # Schedule Manager UI
+    ├── users.html          # User Management UI
+    └── login.html          # Auth UI</code></pre>
+
+      <h3>3.3 ติดตั้ง Dependencies และเริ่มทำงานด้วย PM2</h3>
+      <pre><code>cd /var/www/html/android-tv-control
+
+# ติดตั้ง Dependencies
+npm install express ws multer node-cron
+
+# เริ่มต้นระบบด้วย PM2
+pm2 start server.js --name "android-tv-control"
+
+# บันทึกสถานะเพื่อให้เปิดอัตโนมัติเมื่อเซิร์ฟเวอร์ Reboot
+pm2 save
+pm2 startup</code></pre>
+    </div>
+
+       <h3>3.3 ติดตั้ง scrcpy-server และ scrcpy Client (เวอร์ชันล่าสุด)</h3>
+      <p>ระบบจำเป็นต้องใช้ <code>scrcpy-server.jar</code> เพื่อรองรับการจัดการสตรีมวิดีโอระดับฮาร์ดแวร์บน Android 10 - 14:</p>
+      
+      <p><b>1. ดาวน์โหลด scrcpy-server.jar เข้าสู่โฟลเดอร์โปรเจกต์:</b></p>
+      <pre><code>cd /var/www/html/android-tv-control
+
+# ดาวน์โหลด Server Binary v2.4
+wget https://github.com/Genymobile/scrcpy/releases/download/v2.4/scrcpy-server-v2.4 -O scrcpy-server.jar
+
+# กำหนดสิทธิ์การอ่านไฟล์
+chmod 644 scrcpy-server.jar</code></pre>
+
+      <p><b>2. อัปเดต scrcpy Client บน Ubuntu Server (เลือกวิธีใดวิธีหนึ่ง):</b></p>
+      <ul>
+        <li><b>วิธีที่ 1: ผ่าน Snap (แนะนำและสะดวกที่สุด)</b>
+          <pre><code># ลบเวอร์ชันเก่าออก
+sudo apt remove -y scrcpy
+
+# ติดตั้งเวอร์ชันล่าสุด
+sudo snap install scrcpy</code></pre>
+        </li>
+        <li><b>วิธีที่ 2: คอมไพล์จาก Source Code (สำหรับเซิร์ฟเวอร์ที่ไม่มี Snap)</b>
+          <pre><code># ติดตั้ง Build Dependencies
+sudo apt update
+sudo apt install -y ffmpeg libsdl2-2.0-0 libavcodec-dev libavformat-dev libavutil-dev \
+                    libswresample-dev libsdl2-dev gcc git pkg-config meson ninja-build
+
+# Clone และ Build
+cd /tmp
+git clone https://github.com/Genymobile/scrcpy
+cd scrcpy
+meson setup x --buildtype=release --strip -Db_lto=true
+ninja -C x
+sudo ninja -C x install</code></pre>
+        </li>
+      </ul>
+
+      <p><b>3. ตรวจสอบเวอร์ชันหลังติดตั้ง:</b></p>
+      <pre><code>scrcpy --version</code></pre>
+      <p><i>ผลลัพธ์จะต้องแสดงเป็นเวอร์ชัน <code>scrcpy 2.x</code> ขึ้นไป</i></p>
+
+    <!-- Device Setup -->
+    <div id="device-setup" class="card">
+      <h2>4. การตั้งค่าตัวกล่อง Android TV (Device Setup)</h2>
+      <p>เพื่อให้เซิร์ฟเวอร์สามารถจับภาพหน้าจอและสั่งการได้โดยไม่ติดระบบความปลอดภัย:</p>
+      <ol>
+        <li>เปิดกล่องทีวี ไปที่ <b>Settings (การตั้งค่า) > Device Preferences (ค่ากำหนดอุปกรณ์) > About (เกี่ยวกับ)</b></li>
+        <li>เลื่อนไปที่บรรทัด <b>Build Number (หมายเลขบิลด์)</b> แล้วกดปุ่ม OK บนรีโมทซ้ำๆ 7 ครั้ง จนขึ้นข้อความ <i>"You are now a developer!"</i></li>
+        <li>กลับมาที่หน้าก่อนหน้า เข้าเมนู <b>Developer Options (สำหรับนักพัฒนาซอฟต์แวร์)</b>:
+          <ul>
+            <li>เปิดใช้งาน <b>USB Debugging</b></li>
+            <li>เปิดใช้งาน <b>Disable HW overlays (ปิดการซ้อนทับของฮาร์ดแวร์)</b> <span class="badge warning">สำคัญมากสำหรับ Homatics/Android 14</span></li>
+          </ul>
+        </li>
+        <li>เมื่อเซิร์ฟเวอร์ทำการเชื่อมต่อครั้งแรก จะมีหน้าต่างขึ้นบนจอทีวี ให้ติ๊ก <b>"Always allow from this computer"</b> แล้วกดยืนยัน <b>OK</b></li>
+      </ol>
+    </div>
+
+    <!-- Repo Setup -->
+    <div id="repo-setup" class="card">
+      <h2>5. การตั้งค่าคลังอัปเดตแอป (Local APK Repository)</h2>
+      <p>ไฟล์ <code>apk-repo/versions.json</code> ใช้สำหรับควบคุมเวอร์ชันแอปสตรีมมิ่งที่ต้องการให้ระบบตรวจสอบและแจ้งเตือนอัปเดต:</p>
+      <pre><code>[
+  {
+    "name": "WeTV (TV)",
+    "package": "com.wetv.tv",
+    "latestVersion": "3.5.1",
+    "apkFileName": "wetv-tv-3.5.1.apk"
+  },
+  {
+    "name": "SmartTube (TV)",
+    "package": "com.teamsmart.videomanager.tv",
+    "latestVersion": "21.50",
+    "apkFileName": "smarttube_beta.apk"
+  }
+]</code></pre>
+      <p><b>การนำไฟล์ใส่ Repository:</b> วางไฟล์ APK/Zip ลงในโฟลเดอร์ <code>apk-repo/</code> ให้ชื่อไฟล์ตรงกับคีย์ <code>apkFileName</code> ใน JSON</p>
+    </div>
+
+    <!-- Usage Guide -->
+    <div id="usage-guide" class="card">
+      <h2>6. การใช้งานและแก้ปัญหาเบื้องต้น</h2>
+      
+      <h3>6.1 การควบคุมหน้าจอสด (Fast Canvas Live Stream)</h3>
+      <ul>
+        <li>เลือกกล่องที่ต้องการจากช่อง <b>Target TV</b></li>
+        <li>กดปุ่ม <b>"▶️ Start Live Stream"</b> หน้าจอจะเริ่มสตรีมภาพสดต่อเนื่อง</li>
+        <li>สามารถใช้เมาส์คลิกบนจอภาพ Canvas เพื่อจำลองการใช้นิ้วแตะ (Tap) บนทีวีได้ทันที</li>
+      </ul>
+
+      <h3>6.2 ปัญหาที่พบบ่อย (Troubleshooting)</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>อาการ</th>
+            <th>สาเหตุ</th>
+            <th>วิธีแก้ไข</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>สถานะขึ้น Offline ตลอดเวลา</td>
+            <td>กล่องเปลี่ยน IP หรือยังไม่ Authorize ADB</td>
+            <td>รันคำสั่ง <code>adb connect &lt;IP&gt;:5555</code> บน Server แล้วกดยอมรับบนหน้าจอทีวี</td>
+          </tr>
+          <tr>
+            <td>เปิด YouTube แล้วเป็นจอดำ</td>
+            <td>ติดสิทธิ์ Secure Surface / FLAG_SECURE</td>
+            <td>สลับไปใช้แอป SmartTube หรือเปิด "Disable HW overlays" บนกล่อง</td>
+          </tr>
+          <tr>
+            <td>Split APKs ติดตั้งไม่ผ่าน</td>
+            <td>ไฟล์ขาด base.apk หรือ config เฉพาะชิป</td>
+            <td>บีบอัดไฟล์ Split APKs เป็น <code>.zip</code> แล้วโยนผ่านฟังก์ชัน Upload & Install</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- API Summary -->
+    <div id="api-summary" class="card">
+      <h2>7. สรุปพอร์ตและ Endpoint ใช้งาน</h2>
+      <ul>
+        <li><b>Web Dashboard:</b> <code>http://&lt;SERVER_IP&gt;:8889</code></li>
+        <li><b>Schedule Management:</b> <code>http://&lt;SERVER_IP&gt;:8889/schedule.html</code></li>
+        <li><b>User Management:</b> <code>http://&lt;SERVER_IP&gt;:8889/users.html</code></li>
+        <li><b>Default Login:</b> Username: <code>admin</code> / Password: <code>adminpassword</code></li>
+      </ul>
+    </div>
+
+  </div>
+
+</body>
+</html>
