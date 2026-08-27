@@ -1,0 +1,32 @@
+[
+  {
+    "name": "HBO Max",
+    "package": "com.wbd.stream",
+    "latestVersion": "7.7.1.2",
+    "apkFileName": "max_split.zip"
+  },
+  {
+    "name": "Netflix",
+    "package": "com.netflix.ninja",
+    "latestVersion": "13.1.2",
+    "apkFileName": "netflix_tv.apk"
+  },
+  {
+    "name": "YouTube (TV)",
+    "package": "com.google.android.youtube.tv",
+    "latestVersion": "5.30.320",
+    "apkFileName": "youtube_tv.apk"
+  },
+  {
+    "name": "iQIYI (TV)",
+    "package": "com.iqiyi.i18n.tv",
+    "latestVersion": "10.2.0",
+    "apkFileName": "iqiyi_tv.apk"
+  },
+  {
+    "name": "Disney+ (TV)",
+    "package": "in.startv.hotstar.dplus.tv",
+    "latestVersion": "26.06.22.3",
+    "apkFileName": "disney_split.zip"
+  }
+]
