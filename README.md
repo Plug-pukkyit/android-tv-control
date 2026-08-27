@@ -48,9 +48,13 @@ sudo npm install -g pm2
     └── versions.json       # Config ควบคุมเวอร์ชันแอป
 
 └── public/                 # Frontend Web Interface
+    
     ├── index.html          # Main Dashboard
+    
     ├── schedule.html       # Schedule Manager UI
+    
     ├── users.html          # User Management UI
+    
     └── login.html          # Auth UI
 
 3.3 ติดตั้ง Dependencies และเริ่มทำงานด้วย PM2
