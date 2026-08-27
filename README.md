@@ -98,6 +98,7 @@ sudo apt remove -y scrcpy
 
 # ติดตั้งเวอร์ชันล่าสุด
 sudo snap install scrcpy
+
 วิธีที่ 2: คอมไพล์จาก Source Code (สำหรับเซิร์ฟเวอร์ที่ไม่มี Snap)
 
 # ติดตั้ง Build Dependencies
