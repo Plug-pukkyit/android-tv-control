@@ -28,7 +28,7 @@
 
     .app-container {
       width: 100%;
-      max-width: 900px;
+      max-width: 950px;
       display: flex;
       flex-direction: column;
       gap: 20px;
@@ -83,6 +83,7 @@
     button.danger { background-color: var(--danger); }
     button.warning { background-color: var(--warning); color: #000; }
     button.secondary { background-color: var(--secondary); }
+    button.success { background-color: #2e7d32; }
 
     .filter-tab {
       padding: 6px 12px;
@@ -107,8 +108,9 @@
 
     th, td {
       text-align: left;
-      padding: 12px;
+      padding: 10px 12px;
       border-bottom: 1px solid #2c3a4e;
+      font-size: 0.9rem;
     }
 
     th { color: #a0aec0; font-size: 0.85rem; }
@@ -117,9 +119,9 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 4px 10px;
+      padding: 3px 8px;
       border-radius: 20px;
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       font-weight: 600;
     }
 
@@ -134,6 +136,17 @@
       color: #e57373;
       border: 1px solid #f44336;
     }
+
+    .adb-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: bold;
+    }
+    .adb-connected { background-color: rgba(76, 175, 80, 0.25); color: #81c784; border: 1px solid #4caf50; }
+    .adb-unauthorized { background-color: rgba(255, 152, 0, 0.25); color: #ffb74d; border: 1px solid #ff9800; }
+    .adb-disconnected { background-color: rgba(160, 174, 192, 0.2); color: #a0aec0; border: 1px solid #4a5568; }
 
     .status-dot {
       width: 8px;
@@ -324,6 +337,8 @@
     <div class="batch-bar" id="batchBar" style="display: none;">
       <span style="font-size: 0.9rem;">⚡ <b>Batch Action</b> (<span id="selectedCountText">0</span> Selected):</span>
       <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+        <button class="success" style="padding: 4px 10px; font-size: 0.8rem;" onclick="executeBatchAction('CONNECT_ADB')">🔗 Batch Connect</button>
+        <button class="danger" style="padding: 4px 10px; font-size: 0.8rem; background-color: #880e4f;" onclick="executeBatchAction('DISCONNECT_ADB')">❌ Batch Disconnect</button>
         <button class="secondary" style="padding: 4px 10px; font-size: 0.8rem;" onclick="executeBatchAction('HOME')">🏠 Home</button>
         <button class="warning" style="padding: 4px 10px; font-size: 0.8rem;" onclick="executeBatchAction('OPEN_SETTINGS')">⚙️ Settings</button>
         <button class="secondary" style="padding: 4px 10px; font-size: 0.8rem; background-color: #5c6bc0;" onclick="executeBatchAction('SLEEP_TV')">🌙 Sleep</button>
@@ -334,14 +349,15 @@
       </div>
     </div>
 
-    <div style="max-height: 300px; overflow-y: auto; border: 1px solid #2c3a4e; border-radius: 6px;">
+    <div style="max-height: 320px; overflow-y: auto; border: 1px solid #2c3a4e; border-radius: 6px;">
       <table>
         <thead style="position: sticky; top: 0; background-color: var(--card-bg); z-index: 1;">
           <tr>
             <th style="width: 40px; text-align: center;">
               <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAllTvs(this)">
             </th>
-            <th>Status</th>
+            <th>Ping Status</th>
+            <th>ADB Status</th>
             <th>Name</th>
             <th>IP Address : Port</th>
             <th style="text-align: right;">Actions</th>
@@ -354,10 +370,30 @@
 
   <div class="card">
     <h2>🎯 Target Selection & Resource Monitoring</h2>
-    <div class="form-group">
-      <select id="activeTvSelect" onchange="onTvSelectionChange()">
+    <div class="form-group" style="align-items: center;">
+      <select id="activeTvSelect" onchange="onTvSelectionChange()" style="flex: 2; min-width: 250px;">
         <option value="">-- Select TV --</option>
       </select>
+
+      <!-- Manual ADB Connect/Disconnect buttons for Active TV -->
+      <div style="display: flex; gap: 6px;">
+        <button type="button" class="success" style="padding: 8px 12px; font-size: 0.85rem;" onclick="manualConnectActiveTv()">🔗 Connect ADB</button>
+        <button type="button" class="danger" style="padding: 8px 12px; font-size: 0.85rem;" onclick="manualDisconnectActiveTv()">❌ Disconnect ADB</button>
+      </div>
+    </div>
+
+    <!-- Live Status Banner for Selected TV -->
+    <div id="targetStatusBanner" style="display: flex; align-items: center; justify-content: space-between; background: #0d1117; padding: 10px 14px; border-radius: 6px; border: 1px solid #2c3a4e; margin-bottom: 15px;">
+      <div style="font-size: 0.85rem;">
+        Selected: <b id="bannerTargetText" style="color: #00fff5;">None</b>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <span style="font-size: 0.8rem; color: #a0aec0;">ADB Link:</span>
+        <span id="activeTvAdbBadge" class="adb-badge adb-disconnected">Disconnected ⚪</span>
+      </div>
+    </div>
+
+    <div class="form-group">
       <button class="secondary" style="background-color: #673ab7;" onclick="fetchDeviceInfo()">📺 Check Device Brand/Model</button>
       <button class="secondary" style="background-color: #3f51b5;" onclick="checkCurrentRunningApp()">📱 Check Current Playing App</button>
       <button class="secondary" onclick="getTvNetworkDetails()">ℹ️ Get Network Info</button>
@@ -506,7 +542,8 @@
 
   let socket = null;
   let tvListCache = [];
-  let currentStatuses = {};
+  let currentStatuses = {};   // { [target]: 'online' | 'offline' }
+  let currentAdbStates = {};  // { [target]: 'connected' | 'unauthorized' | 'disconnected' }
   let currentFilter = 'all';
   let selectedTvTargets = new Set();
   let isStreaming = false;
@@ -588,7 +625,7 @@
 
     const tbody = document.getElementById('tvTableBody');
     if (filteredTvs.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #a0aec0; padding: 20px;">No matching TV devices found.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #a0aec0; padding: 20px;">No matching TV devices found.</td></tr>`;
       return;
     }
 
@@ -596,9 +633,17 @@
       const portText = tv.port || '5555';
       const target = `${tv.ip}:${portText}`;
       const status = currentStatuses[target] || currentStatuses[tv.ip] || 'offline';
+      const adbState = currentAdbStates[target] || currentAdbStates[tv.ip] || 'disconnected';
       const statusClass = status === 'online' ? 'online' : 'offline';
       const statusText = status === 'online' ? 'Online' : 'Offline';
       const isChecked = selectedTvTargets.has(target) ? 'checked' : '';
+
+      let adbBadgeHtml = '<span class="adb-badge adb-disconnected">Disconnected ⚪</span>';
+      if (adbState === 'connected') {
+        adbBadgeHtml = '<span class="adb-badge adb-connected">Connected 🟢</span>';
+      } else if (adbState === 'unauthorized') {
+        adbBadgeHtml = '<span class="adb-badge adb-unauthorized">Unauthorized 🟡</span>';
+      }
 
       return `
         <tr>
@@ -610,17 +655,21 @@
               <span class="status-dot"></span>${statusText}
             </span>
           </td>
+          <td>${adbBadgeHtml}</td>
           <td><b>${escapeHtml(tv.name)}</b></td>
           <td><code>${escapeHtml(tv.ip)}:${escapeHtml(portText)}</code></td>
           <td style="text-align: right;">
-            <button class="secondary" style="padding: 4px 8px;" onclick="openEditModal('${tv.id}', '${escapeHtml(tv.name)}', '${escapeHtml(tv.ip)}', '${escapeHtml(portText)}')">✏️ Edit</button>
-            <button class="danger" style="padding: 4px 8px;" onclick="deleteTv('${tv.id}')">🗑️ Delete</button>
+            <button class="success" style="padding: 4px 8px; font-size: 0.75rem;" onclick="manualConnectTv('${tv.ip}', '${portText}')" title="Connect ADB">🔗 Connect</button>
+            <button class="danger" style="padding: 4px 8px; font-size: 0.75rem; background-color: #880e4f;" onclick="manualDisconnectTv('${tv.ip}', '${portText}')" title="Disconnect ADB">❌ Disconnect</button>
+            <button class="secondary" style="padding: 4px 8px; font-size: 0.75rem;" onclick="openEditModal('${tv.id}', '${escapeHtml(tv.name)}', '${escapeHtml(tv.ip)}', '${escapeHtml(portText)}')">✏️</button>
+            <button class="danger" style="padding: 4px 8px; font-size: 0.75rem;" onclick="deleteTv('${tv.id}')">🗑️</button>
           </td>
         </tr>
       `;
     }).join('');
 
     updateBatchBarUI();
+    updateActiveTvBadge();
   }
 
   function toggleTvSelection(target, checked) {
@@ -662,7 +711,83 @@
         socket.send(JSON.stringify({ action, ip: parts[0], port: parts[1] || '5555' }));
       }
     });
-    alert(`Batch command [${action}] sent to ${targets.length} TVs!`);
+  }
+
+  // ==========================================
+  // MANUAL ADB CONNECT / DISCONNECT LOGIC
+  // ==========================================
+
+  async function manualConnectTv(ip, port) {
+    addLog(`Attempting ADB Connect to ${ip}:${port}...`);
+    try {
+      const res = await fetch('/api/tv/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip, port })
+      });
+      const data = await res.json();
+      if (data.success) {
+        addLog(`✅ ADB Connected: ${ip}:${port}`);
+      } else {
+        addLog(`⚠️ ADB Connect Response: ${data.details || data.message}`);
+      }
+    } catch (e) {
+      addLog(`❌ ADB Connect Error: ${e.message}`);
+    }
+  }
+
+  async function manualDisconnectTv(ip, port) {
+    addLog(`Disconnecting ADB for ${ip}:${port}...`);
+    try {
+      const res = await fetch('/api/tv/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip, port })
+      });
+      const data = await res.json();
+      addLog(`ADB Disconnected for ${ip}:${port}`);
+    } catch (e) {
+      addLog(`❌ ADB Disconnect Error: ${e.message}`);
+    }
+  }
+
+  function manualConnectActiveTv() {
+    const device = getSelectedDevice();
+    if (!device) return alert('Please select a Target TV first!');
+    manualConnectTv(device.ip, device.port);
+  }
+
+  function manualDisconnectActiveTv() {
+    const device = getSelectedDevice();
+    if (!device) return alert('Please select a Target TV first!');
+    manualDisconnectTv(device.ip, device.port);
+  }
+
+  function updateActiveTvBadge() {
+    const device = getSelectedDevice();
+    const bannerTarget = document.getElementById('bannerTargetText');
+    const badge = document.getElementById('activeTvAdbBadge');
+
+    if (!device) {
+      bannerTarget.innerText = 'None';
+      badge.className = 'adb-badge adb-disconnected';
+      badge.innerText = 'Disconnected ⚪';
+      return;
+    }
+
+    bannerTarget.innerText = device.target;
+    const adbState = currentAdbStates[device.target] || currentAdbStates[device.ip] || 'disconnected';
+
+    if (adbState === 'connected') {
+      badge.className = 'adb-badge adb-connected';
+      badge.innerText = 'Connected 🟢';
+    } else if (adbState === 'unauthorized') {
+      badge.className = 'adb-badge adb-unauthorized';
+      badge.innerText = 'Unauthorized 🟡';
+    } else {
+      badge.className = 'adb-badge adb-disconnected';
+      badge.innerText = 'Disconnected ⚪';
+    }
   }
 
   async function fetchDeviceInfo() {
@@ -677,7 +802,7 @@
         alert(`📺 Target TV: ${device.target}\n🏷️ Brand: ${data.brand}\n🏭 Manufacturer: ${data.manufacturer}\n📱 Model: ${data.model}\n💡 Device Category: ${data.deviceType}`);
         addLog(`✅ Device Info (${device.target}): ${data.brand} ${data.model} [${data.deviceType}]`);
       } else {
-        alert('Failed to get device info: ' + (data.error || 'Unknown error'));
+        alert('Failed to get device info: ' + (data.error || 'Make sure ADB is Connected'));
       }
     } catch (err) {
       addLog('❌ Fetch device info error: ' + err.message);
@@ -826,6 +951,7 @@
     const currentVal = select.value;
     if (tvListCache.length === 0) {
       select.innerHTML = `<option value="">-- No TV Available --</option>`;
+      updateActiveTvBadge();
       return;
     }
 
@@ -833,13 +959,16 @@
       const portText = tv.port || '5555';
       const target = `${tv.ip}:${portText}`;
       const status = currentStatuses[target] || currentStatuses[tv.ip] || 'offline';
+      const adbState = currentAdbStates[target] || currentAdbStates[tv.ip] || 'disconnected';
       const icon = status === 'online' ? '🟢' : '🔴';
-      return `<option value="${target}">${icon} ${tv.name} (${target})</option>`;
+      const adbMark = adbState === 'connected' ? '⚡[ADB OK]' : adbState === 'unauthorized' ? '⚠️[Auth]' : '⚪[Disconnected]';
+      return `<option value="${target}">${icon} ${tv.name} (${target}) ${adbMark}</option>`;
     }).join('');
 
     if (currentVal && tvListCache.some(t => `${t.ip}:${t.port || '5555'}` === currentVal)) {
       select.value = currentVal;
     }
+    updateActiveTvBadge();
   }
 
   function openEditModal(id, name, ip, port) {
@@ -984,6 +1113,7 @@
     document.getElementById('resourceContainer').style.display = 'none';
     if (isStreaming) toggleScreenStream();
     document.getElementById('appListContainer').innerHTML = '<span style="color: #a0aec0; font-size: 0.85rem;">Click any button above to load app list...</span>';
+    updateActiveTvBadge();
   }
 
   document.getElementById('addTvForm').addEventListener('submit', async (e) => {
@@ -1102,57 +1232,57 @@
   }
 
   async function checkPopularAppVersions() {
-  const device = getSelectedDevice();
-  const container = document.getElementById('appListContainer');
-  if (!device) return alert('Please select a Target TV from the dropdown first!');
+    const device = getSelectedDevice();
+    const container = document.getElementById('appListContainer');
+    if (!device) return alert('Please select a Target TV from the dropdown first!');
 
-  container.innerHTML = '<span style="color: #ff9800; font-size: 0.85rem;">⌛ Checking versions for all Streaming Apps...</span>';
-  addLog(`Checking popular app versions on ${device.target}...`);
+    container.innerHTML = '<span style="color: #ff9800; font-size: 0.85rem;">⌛ Checking versions for all Streaming Apps...</span>';
+    addLog(`Checking popular app versions on ${device.target}...`);
 
-  const popularApps = [
-    { name: 'WeTV (TV)', pkg: 'com.wetv.tv' },
-    { name: 'Netflix', pkg: 'com.netflix.ninja' },
-    { name: 'HBO Max / Max', pkg: 'com.wbd.stream' },
-    { name: 'Bilibili (TV)', pkg: 'tv.danmaku.bili,com.bilibili.app.in' },
-    { name: 'iQIYI (TV)', pkg: 'com.iqiyi.i18n.tv' },
-    { name: 'YouTube (TV)', pkg: 'com.google.android.youtube.tv' },
-    { name: 'Disney+ (TV)', pkg: 'in.startv.hotstar.dplus.tv' }
-  ];
+    const popularApps = [
+      { name: 'WeTV (TV)', pkg: 'com.wetv.tv' },
+      { name: 'Netflix', pkg: 'com.netflix.ninja' },
+      { name: 'HBO Max / Max', pkg: 'com.wbd.stream' },
+      { name: 'Bilibili (TV)', pkg: 'tv.danmaku.bili,com.bilibili.app.in' },
+      { name: 'iQIYI (TV)', pkg: 'com.iqiyi.i18n.tv' },
+      { name: 'YouTube (TV)', pkg: 'com.google.android.youtube.tv' },
+      { name: 'Disney+ (TV)', pkg: 'in.startv.hotstar.dplus.tv' }
+    ];
 
-  try {
-    const results = await Promise.all(popularApps.map(async (app) => {
-      const res = await fetch(`/api/get-app-version?ip=${device.ip}&port=${device.port}&package=${app.pkg}`);
-      const data = await res.json();
-      return { ...app, version: data.versionName || 'Not Installed' };
-    }));
+    try {
+      const results = await Promise.all(popularApps.map(async (app) => {
+        const res = await fetch(`/api/get-app-version?ip=${device.ip}&port=${device.port}&package=${app.pkg}`);
+        const data = await res.json();
+        return { ...app, version: data.versionName || 'Not Installed' };
+      }));
 
-    container.innerHTML = `
-      <div style="font-size: 0.85rem; color: #81c784; margin-bottom: 8px;"><b>Popular Streaming Apps Status:</b></div>
-      <table style="width: 100%; font-size: 0.85rem;">
-        <thead>
-          <tr><th>App Name</th><th>Package Name</th><th>Installed Version</th><th>Quick Action</th></tr>
-        </thead>
-        <tbody>
-          ${results.map(item => `
-            <tr>
-              <td><b>${item.name}</b></td>
-              <td><code>${item.pkg.split(',')[0]}</code></td>
-              <td><span style="color: ${item.version.includes('Not Installed') ? '#f44336' : '#00fff5'}; font-weight: bold;">${item.version}</span></td>
-              <td>
-                ${!item.version.includes('Not Installed') 
-                  ? `<button class="danger" style="padding: 2px 6px; font-size: 0.75rem; background-color: #d32f2f;" onclick="forceStopApp('${item.pkg.split(',')[0]}')">🛑 Force Stop</button>` 
-                  : '<span style="color: #a0aec0;">-</span>'}
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    `;
-    addLog(`✅ Checked Streaming Apps versions on ${device.target}`);
-  } catch (err) {
-    container.innerHTML = `<span style="color: #f44336; font-size: 0.85rem;">Error checking versions: ${err.message}</span>`;
+      container.innerHTML = `
+        <div style="font-size: 0.85rem; color: #81c784; margin-bottom: 8px;"><b>Popular Streaming Apps Status:</b></div>
+        <table style="width: 100%; font-size: 0.85rem;">
+          <thead>
+            <tr><th>App Name</th><th>Package Name</th><th>Installed Version</th><th>Quick Action</th></tr>
+          </thead>
+          <tbody>
+            ${results.map(item => `
+              <tr>
+                <td><b>${item.name}</b></td>
+                <td><code>${item.pkg.split(',')[0]}</code></td>
+                <td><span style="color: ${item.version.includes('Not Installed') ? '#f44336' : '#00fff5'}; font-weight: bold;">${item.version}</span></td>
+                <td>
+                  ${!item.version.includes('Not Installed') 
+                    ? `<button class="danger" style="padding: 2px 6px; font-size: 0.75rem; background-color: #d32f2f;" onclick="forceStopApp('${item.pkg.split(',')[0]}')">🛑 Force Stop</button>` 
+                    : '<span style="color: #a0aec0;">-</span>'}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+      addLog(`✅ Checked Streaming Apps versions on ${device.target}`);
+    } catch (err) {
+      container.innerHTML = `<span style="color: #f44336; font-size: 0.85rem;">Error checking versions: ${err.message}</span>`;
+    }
   }
-}
 
   async function checkSingleAppVersion(pkg) {
     const device = getSelectedDevice();
@@ -1221,9 +1351,17 @@
             const key = item.target || `${item.ip}:${item.port || '5555'}`;
             currentStatuses[key] = item.status;
             currentStatuses[item.ip] = item.status;
+            if (item.adbState) {
+              currentAdbStates[key] = item.adbState;
+              currentAdbStates[item.ip] = item.adbState;
+            }
           });
           filterAndRenderTvs();
           renderTvSelect();
+        } else if (data.action === 'CONNECT_ADB_RESULT') {
+          addLog(`Connect Result [${data.ip}:${data.port}]: ${data.message}`);
+        } else if (data.action === 'DISCONNECT_ADB_RESULT') {
+          addLog(`Disconnect Result [${data.ip}:${data.port}]: ${data.message}`);
         } else if (data.action === 'SCREEN_FRAME') {
           if (data.status === 'success' && data.image) {
             drawFrameToCanvas(data.image, data.timestamp);
