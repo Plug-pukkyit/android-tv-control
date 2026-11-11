@@ -4,9 +4,9 @@ const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { exec } = require('child_process');
+const net = require('net');
+const { exec, spawn } = require('child_process');
 const multer = require('multer');
-const cron = require('node-cron');
 
 const app = express();
 const server = http.createServer(app);
@@ -17,9 +17,15 @@ const DB_PATH = path.join(__dirname, 'db.json');
 const USERS_DB_PATH = path.join(__dirname, 'users.json');
 const SCHEDULES_DB_PATH = path.join(__dirname, 'schedules.json');
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
+const APK_REPO_DIR = path.join(__dirname, 'apk-repo');
+const VERSIONS_FILE = path.join(APK_REPO_DIR, 'versions.json');
+const SCRCPY_PATH = path.join(__dirname, 'scrcpy-server.jar');
 
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+if (!fs.existsSync(APK_REPO_DIR)) {
+  fs.mkdirSync(APK_REPO_DIR, { recursive: true });
 }
 
 const storage = multer.diskStorage({
@@ -116,10 +122,27 @@ function getTvDevice(ip, port) {
 }
 
 // ==========================================
-// SCHEDULE ENGINE (CRON EXECUTION)
+// SCHEDULE ENGINE (NATIVE TIMER - NO CRON)
 // ==========================================
 
 function executeTvAction(target, action) {
+  if (action === 'AUTO_UPDATE_APPS') {
+    autoCheckAndUpdateTvApps(target);
+    return;
+  }
+
+  if (action === 'REBOOT_TV') {
+    exec(`adb devices`, { timeout: 1500 }, (err, stdout) => {
+      const devicesOutput = stdout || '';
+      if (devicesOutput.includes(`${target}\tunauthorized`)) return;
+
+      exec(`adb connect ${target}`, { timeout: 2000 }, () => {
+        exec(`adb -s ${target} reboot`, { timeout: 4000 });
+      });
+    });
+    return;
+  }
+
   const keycode = action === 'SLEEP_TV' ? '223' : '224';
   exec(`adb devices`, { timeout: 1500 }, (err, stdout) => {
     const devicesOutput = stdout || '';
@@ -131,7 +154,7 @@ function executeTvAction(target, action) {
   });
 }
 
-cron.schedule('* * * * *', () => {
+setInterval(() => {
   const now = new Date();
   const currentMin = now.getMinutes();
   const currentHour = now.getHours();
@@ -173,7 +196,61 @@ cron.schedule('* * * * *', () => {
   });
 
   if (updated) writeSchedulesDatabase(schedules);
-});
+}, 60000);
+
+function autoCheckAndUpdateTvApps(target) {
+  if (!fs.existsSync(VERSIONS_FILE)) return;
+  let repoVersions = [];
+  try {
+    repoVersions = JSON.parse(fs.readFileSync(VERSIONS_FILE, 'utf8') || '[]');
+  } catch (e) { return; }
+
+  if (repoVersions.length === 0) return;
+
+  exec(`adb connect ${target}`, { timeout: 3000 }, () => {
+    repoVersions.forEach(appItem => {
+      exec(`adb -s ${target} shell dumpsys package ${appItem.package}`, { timeout: 4000 }, (err, stdout) => {
+        let installedVersion = 'Not Installed';
+        if (!err && stdout) {
+          const match = stdout.match(/versionName=([^\s]+)/);
+          if (match && match[1]) installedVersion = match[1];
+        }
+
+        if (installedVersion !== 'Not Installed' && installedVersion !== appItem.latestVersion) {
+          const targetPath = path.join(APK_REPO_DIR, appItem.apkFileName);
+          if (!fs.existsSync(targetPath)) return;
+
+          console.log(`[Schedule Auto-Update] Updating ${appItem.name} on ${target}...`);
+
+          const stat = fs.statSync(targetPath);
+          const runInstall = (apkPaths) => {
+            const isMultiple = apkPaths.length > 1;
+            const installCmd = isMultiple
+              ? `adb -s ${target} install-multiple -r -d -g ${apkPaths.join(' ')}`
+              : `adb -s ${target} install -r -d -g ${apkPaths[0]}`;
+            exec(installCmd, { timeout: 180000 });
+          };
+
+          if (stat.isDirectory()) {
+            const files = fs.readdirSync(targetPath).filter(f => f.endsWith('.apk'));
+            if (files.length > 0) runInstall(files.map(f => `"${path.join(targetPath, f)}"`));
+          } else if (appItem.apkFileName.endsWith('.zip') || appItem.apkFileName.endsWith('.xapk') || appItem.apkFileName.endsWith('.apks')) {
+            const tempExtractDir = path.join(UPLOAD_DIR, 'temp-cron-' + Date.now());
+            fs.mkdirSync(tempExtractDir, { recursive: true });
+            exec(`unzip -o -q "${targetPath}" -d "${tempExtractDir}"`, (unzipErr) => {
+              if (!unzipErr) {
+                const files = fs.readdirSync(tempExtractDir).filter(f => f.endsWith('.apk'));
+                if (files.length > 0) runInstall(files.map(f => `"${path.join(tempExtractDir, f)}"`));
+              }
+            });
+          } else {
+            runInstall([`"${targetPath}"`]);
+          }
+        }
+      });
+    });
+  });
+}
 
 // ==========================================
 // REST APIs (SCHEDULE & USER)
@@ -283,7 +360,7 @@ app.delete('/api/users/:id', (req, res) => {
 });
 
 // ==========================================
-// TV REST APIS
+// TV REST APIS & MANUAL ADB CONNECT/DISCONNECT
 // ==========================================
 
 app.get('/api/server-info', (req, res) => res.json({ serverIp: getServerIp(), port: PORT }));
@@ -314,7 +391,7 @@ app.put('/api/tvs/:id', (req, res) => {
     ...tvs[index], 
     name: name ? name.trim() : tvs[index].name, 
     ip: ip ? ip.trim() : tvs[index].ip,
-    port: port ? port.trim() : tvs[index].port || '5555'
+    port: port ? port.trim() : tvs[index].port || '5555' 
   };
   if (writeDatabase(tvs)) res.json(tvs[index]);
   else res.status(500).json({ error: 'Update failed' });
@@ -328,17 +405,43 @@ app.delete('/api/tvs/:id', (req, res) => {
   else res.status(500).json({ error: 'Delete failed' });
 });
 
+// Manual Connect ADB (เรียกเฉพาะเมื่อกดปุ่ม)
+app.post('/api/tv/connect', (req, res) => {
+  const { ip, port } = req.body;
+  if (!ip) return res.status(400).json({ error: 'Target IP required' });
+  const target = `${ip}:${port || '5555'}`;
+
+  exec(`adb connect ${target}`, { timeout: 4000 }, (err, stdout, stderr) => {
+    const output = (stdout || '') + (stderr || '');
+    pollTvStatuses();
+    if (output.includes('connected to') || output.includes('already connected')) {
+      return res.json({ success: true, message: `Connected to ${target}`, output: output.trim() });
+    }
+    res.status(500).json({ success: false, message: `Failed to connect ${target}`, details: output.trim() });
+  });
+});
+
+// Manual Disconnect ADB (ตัดการเชื่อมต่อเมื่อใช้งานเสร็จ)
+app.post('/api/tv/disconnect', (req, res) => {
+  const { ip, port } = req.body;
+  if (!ip) return res.status(400).json({ error: 'Target IP required' });
+  const target = `${ip}:${port || '5555'}`;
+
+  exec(`adb disconnect ${target}`, { timeout: 3000 }, (err, stdout, stderr) => {
+    pollTvStatuses();
+    res.json({ success: true, message: `Disconnected ${target}`, output: ((stdout || '') + (stderr || '')).trim() });
+  });
+});
+
 app.get('/api/get-tv-network', (req, res) => {
   const targetIp = req.query.ip;
   const targetPort = req.query.port;
   if (!targetIp) return res.status(400).json({ error: 'Target TV IP required' });
   const device = getTvDevice(targetIp, targetPort);
 
-  exec(`adb connect ${device.target}`, { timeout: 3000 }, () => {
-    exec(`adb -s ${device.target} shell ip route`, { timeout: 3000 }, (err, stdout, stderr) => {
-      if (err) return res.status(500).json({ error: 'Failed', details: stderr || err.message });
-      res.json({ ip: targetIp, port: device.port, routeInfo: stdout.trim() });
-    });
+  exec(`adb -s ${device.target} shell ip route`, { timeout: 3000 }, (err, stdout, stderr) => {
+    if (err) return res.status(500).json({ error: 'Failed', details: stderr || err.message });
+    res.json({ ip: targetIp, port: device.port, routeInfo: stdout.trim() });
   });
 });
 
@@ -348,21 +451,17 @@ app.get('/api/get-device-info', (req, res) => {
   if (!targetIp) return res.status(400).json({ error: 'Target TV IP required' });
   const device = getTvDevice(targetIp, targetPort);
 
-  exec(`adb connect ${device.target}`, { timeout: 3000 }, (connErr) => {
-    if (connErr) return res.status(500).json({ error: 'Device unreachable' });
+  const cmd = `adb -s ${device.target} shell "getprop ro.product.manufacturer && echo '---' && getprop ro.product.model && echo '---' && getprop ro.product.brand"`;
+  exec(cmd, { timeout: 3000 }, (err, stdout) => {
+    if (err || !stdout) return res.status(500).json({ error: 'Device not reachable via ADB' });
 
-    const cmd = `adb -s ${device.target} shell "getprop ro.product.manufacturer && echo '---' && getprop ro.product.model && echo '---' && getprop ro.product.brand"`;
-    exec(cmd, { timeout: 3000 }, (err, stdout) => {
-      if (err || !stdout) return res.status(500).json({ error: 'Failed to fetch info' });
+    const parts = stdout.split('---').map(s => s.trim());
+    const manufacturer = parts[0] || 'Unknown';
+    const model = parts[1] || 'Unknown';
+    const brand = parts[2] || 'Unknown';
+    const isZte = manufacturer.toLowerCase().includes('zte') || brand.toLowerCase().includes('zte') || model.toLowerCase().includes('b86');
 
-      const parts = stdout.split('---').map(s => s.trim());
-      const manufacturer = parts[0] || 'Unknown';
-      const model = parts[1] || 'Unknown';
-      const brand = parts[2] || 'Unknown';
-      const isZte = manufacturer.toLowerCase().includes('zte') || brand.toLowerCase().includes('zte') || model.toLowerCase().includes('b86');
-
-      res.json({ ip: targetIp, port: device.port, manufacturer, model, brand, deviceType: isZte ? 'ZTE Box 📦' : 'Standard Android TV 📺' });
-    });
+    res.json({ ip: targetIp, port: device.port, manufacturer, model, brand, deviceType: isZte ? 'ZTE Box 📦' : 'Standard Android TV 📺' });
   });
 });
 
@@ -372,29 +471,28 @@ app.get('/api/get-current-app', (req, res) => {
   if (!targetIp) return res.status(400).json({ error: 'Target TV IP required' });
   const device = getTvDevice(targetIp, targetPort);
 
-  exec(`adb connect ${device.target}`, { timeout: 3000 }, () => {
-    exec(`adb -s ${device.target} shell "dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'"`, { timeout: 4000 }, (err, stdout) => {
-      if (err || !stdout) return res.json({ ip: targetIp, port: device.port, package: 'Unknown', appName: 'Unknown / Off' });
+  exec(`adb -s ${device.target} shell "dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'"`, { timeout: 4000 }, (err, stdout) => {
+    if (err || !stdout) return res.json({ ip: targetIp, port: device.port, package: 'Unknown', appName: 'Unknown / Off' });
 
-      const match = stdout.match(/([a-zA-Z0-9_.]+)\/([a-zA-Z0-9_.]+)/);
-      if (match && match[1]) {
-        const packageName = match[1];
-        const appNames = {
-          'com.wetv.tv': 'WeTV (TV)',
-          'com.netflix.ninja': 'Netflix',
-          'com.wbd.stream': 'HBO Max / Max',
-          'tv.danmaku.bili': 'Bilibili (TV)',
-          'com.bilibili.app.in': 'Bilibili (TV)',
-          'com.iqiyi.i18n.tv': 'iQIYI (TV)',
-          'com.google.android.youtube.tv': 'YouTube (TV)',
-          'com.disney.disneyplus': 'Disney+ (TV)',
-          'com.google.android.tvlauncher': 'Android TV Home'
-        };
-        res.json({ ip: targetIp, port: device.port, package: packageName, appName: appNames[packageName] || packageName });
-      } else {
-        res.json({ ip: targetIp, port: device.port, package: 'Home', appName: 'Home Screen' });
-      }
-    });
+    const match = stdout.match(/([a-zA-Z0-9_.]+)\/([a-zA-Z0-9_.]+)/);
+    if (match && match[1]) {
+      const packageName = match[1];
+      const appNames = {
+        'com.wetv.tv': 'WeTV (TV)',
+        'com.netflix.ninja': 'Netflix',
+        'com.wbd.stream': 'HBO Max / Max',
+        'tv.danmaku.bili': 'Bilibili (TV)',
+        'com.bilibili.app.in': 'Bilibili (TV)',
+        'com.iqiyi.i18n.tv': 'iQIYI (TV)',
+        'com.google.android.youtube.tv': 'YouTube (TV)',
+        'in.startv.hotstar.dplus.tv': 'Disney+ (TV)',
+        'com.disney.disneyplus': 'Disney+ (TV)',
+        'com.google.android.tvlauncher': 'Android TV Home'
+      };
+      res.json({ ip: targetIp, port: device.port, package: packageName, appName: appNames[packageName] || packageName });
+    } else {
+      res.json({ ip: targetIp, port: device.port, package: 'Home', appName: 'Home Screen' });
+    }
   });
 });
 
@@ -404,59 +502,61 @@ app.get('/api/get-system-resources', (req, res) => {
   if (!targetIp) return res.status(400).json({ error: 'Target TV IP required' });
   const device = getTvDevice(targetIp, targetPort);
 
-  exec(`adb connect ${device.target}`, { timeout: 3000 }, () => {
-    const cmd = `adb -s ${device.target} shell "cat /proc/meminfo && echo '---SPLIT---' && df -h /data && echo '---SPLIT---' && dumpsys wifi"`;
-    exec(cmd, { timeout: 6000 }, (err, stdout) => {
-      if (err || !stdout) return res.status(500).json({ error: 'Failed to fetch resources' });
+  const cmd = `adb -s ${device.target} shell "cat /proc/meminfo && echo '---SPLIT---' && df -h /data && echo '---SPLIT---' && dumpsys wifi"`;
+  exec(cmd, { timeout: 6000 }, (err, stdout) => {
+    if (err || !stdout) return res.status(500).json({ error: 'Failed to fetch resources' });
 
-      const parts = stdout.split('---SPLIT---');
-      const ramOut = parts[0] || '';
-      const storageOut = parts[1] || '';
-      const wifiOut = parts[2] || '';
+    const parts = stdout.split('---SPLIT---');
+    const ramOut = parts[0] || '';
+    const storageOut = parts[1] || '';
+    const wifiOut = parts[2] || '';
 
-      let ramInfo = { total: 'N/A', used: 'N/A', free: 'N/A', percent: 0 };
-      const memTotalMatch = ramOut.match(/MemTotal:\s+(\d+)\s+kB/i);
-      const memAvailableMatch = ramOut.match(/MemAvailable:\s+(\d+)\s+kB/i) || ramOut.match(/MemFree:\s+(\d+)\s+kB/i);
+    let ramInfo = { total: 'N/A', used: 'N/A', free: 'N/A', percent: 0 };
+    const memTotalMatch = ramOut.match(/MemTotal:\s+(\d+)\s+kB/i);
+    const memAvailableMatch = ramOut.match(/MemAvailable:\s+(\d+)\s+kB/i) || ramOut.match(/MemFree:\s+(\d+)\s+kB/i);
 
-      if (memTotalMatch && memAvailableMatch) {
-        const totalKb = parseInt(memTotalMatch[1]);
-        const availKb = parseInt(memAvailableMatch[1]);
-        const usedKb = totalKb - availKb;
-        ramInfo = {
-          total: `${Math.round(totalKb / 1024)} MB`,
-          used: `${Math.round(usedKb / 1024)} MB`,
-          free: `${Math.round(availKb / 1024)} MB`,
-          percent: Math.round((usedKb / totalKb) * 100)
-        };
-      }
+    if (memTotalMatch && memAvailableMatch) {
+      const totalKb = parseInt(memTotalMatch[1]);
+      const availKb = parseInt(memAvailableMatch[1]);
+      const usedKb = totalKb - availKb;
+      ramInfo = {
+        total: `${Math.round(totalKb / 1024)} MB`,
+        used: `${Math.round(usedKb / 1024)} MB`,
+        free: `${Math.round(availKb / 1024)} MB`,
+        percent: Math.round((usedKb / totalKb) * 100)
+      };
+    }
 
-      let storageInfo = { size: 'N/A', used: 'N/A', avail: 'N/A', percent: '0%' };
-      const storageLines = storageOut.trim().split('\n');
-      if (storageLines.length >= 2) {
-        const dataLine = storageLines.find(line => line.includes('/data')) || storageLines[1];
-        const cols = dataLine.trim().split(/\s+/);
-        if (cols.length >= 5) storageInfo = { size: cols[1], used: cols[2], avail: cols[3], percent: cols[4] };
-      }
+    let storageInfo = { size: 'N/A', used: 'N/A', avail: 'N/A', percent: '0%' };
+    const storageLines = storageOut.trim().split('\n');
+    if (storageLines.length >= 2) {
+      const dataLine = storageLines.find(line => line.includes('/data')) || storageLines[1];
+      const cols = dataLine.trim().split(/\s+/);
+      if (cols.length >= 5) storageInfo = { size: cols[1], used: cols[2], avail: cols[3], percent: cols[4] };
+    }
 
-      let wifiInfo = { rssi: 'Ethernet / Connected 🌐', linkSpeed: 'LAN Cable', ssid: 'Wired Network' };
-      const rssiMatch = wifiOut.match(/RSSI:\s*(-?\d+)/i) || wifiOut.match(/rssi=(-?\d+)/i);
-      const speedMatch = wifiOut.match(/Link speed:\s*(\d+\s*Mbps)/i) || wifiOut.match(/linkSpeed=(\d+)/i);
-      const ssidMatch = wifiOut.match(/SSID:\s*"?([^",\n]+)"?/i);
+    let wifiInfo = { rssi: 'Ethernet / Connected 🌐', linkSpeed: 'LAN Cable', ssid: 'Wired Network' };
+    const rssiMatch = wifiOut.match(/RSSI:\s*(-?\d+)/i) || wifiOut.match(/rssi=(-?\d+)/i);
+    const speedMatch = wifiOut.match(/Link speed:\s*(\d+\s*Mbps)/i) || wifiOut.match(/linkSpeed=(\d+)/i);
+    const ssidMatch = wifiOut.match(/SSID:\s*"?([^",\n]+)"?/i);
 
-      if (rssiMatch && parseInt(rssiMatch[1]) !== -127 && parseInt(rssiMatch[1]) !== 0) {
-        const rssiVal = parseInt(rssiMatch[1]);
-        let signalQuality = rssiVal >= -60 ? 'Excellent 🟢' : rssiVal >= -75 ? 'Good 🟡' : 'Weak 🔴';
-        wifiInfo = {
-          rssi: `${rssiVal} dBm (${signalQuality})`,
-          linkSpeed: speedMatch ? (speedMatch[1].includes('Mbps') ? speedMatch[1] : `${speedMatch[1]} Mbps`) : 'N/A',
-          ssid: ssidMatch ? ssidMatch[1].trim() : 'Connected'
-        };
-      }
+    if (rssiMatch && parseInt(rssiMatch[1]) !== -127 && parseInt(rssiMatch[1]) !== 0) {
+      const rssiVal = parseInt(rssiMatch[1]);
+      let signalQuality = rssiVal >= -60 ? 'Excellent 🟢' : rssiVal >= -75 ? 'Good 🟡' : 'Weak 🔴';
+      wifiInfo = {
+        rssi: `${rssiVal} dBm (${signalQuality})`,
+        linkSpeed: speedMatch ? (speedMatch[1].includes('Mbps') ? speedMatch[1] : `${speedMatch[1]} Mbps`) : 'N/A',
+        ssid: ssidMatch ? ssidMatch[1].trim() : 'Connected'
+      };
+    }
 
-      res.json({ ip: targetIp, port: device.port, ram: ramInfo, storage: storageInfo, wifi: wifiInfo });
-    });
+    res.json({ ip: targetIp, port: device.port, ram: ramInfo, storage: storageInfo, wifi: wifiInfo });
   });
 });
+
+// ==========================================
+// APK INSTALLER & REPO MANAGEMENT
+// ==========================================
 
 app.post('/api/install-apk', upload.single('apkFile'), (req, res) => {
   const targetIp = req.body.ip;
@@ -476,20 +576,17 @@ app.post('/api/install-apk', upload.single('apkFile'), (req, res) => {
       ? `adb -s ${device.target} install-multiple -r -d -g ${apkPaths.join(' ')}`
       : `adb -s ${device.target} install -r -d -g ${apkPaths[0]}`;
 
-    exec(`adb connect ${device.target}`, { timeout: 3000 }, () => {
-      exec(installCmd, { timeout: 180000 }, (instErr, stdout, stderr) => {
-        // ลบไฟล์อัปโหลดและโฟลเดอร์ชั่วคราว
-        fs.unlink(filePath, () => {});
-        if (tempExtractDir && fs.existsSync(tempExtractDir)) {
-          exec(`rm -rf "${tempExtractDir}"`);
-        }
+    exec(installCmd, { timeout: 180000 }, (instErr, stdout, stderr) => {
+      fs.unlink(filePath, () => {});
+      if (tempExtractDir && fs.existsSync(tempExtractDir)) {
+        exec(`rm -rf "${tempExtractDir}"`);
+      }
 
-        const output = (stdout || '') + (stderr || '');
-        if (instErr || !output.includes('Success')) {
-          return res.status(500).json({ error: 'Install failed', details: output.trim() || instErr.message });
-        }
-        res.json({ message: `Installed ${apkPaths.length} package(s) successfully!`, output: output.trim() });
-      });
+      const output = (stdout || '') + (stderr || '');
+      if (instErr || !output.includes('Success')) {
+        return res.status(500).json({ error: 'Install failed', details: output.trim() || instErr.message });
+      }
+      res.json({ message: `Installed ${apkPaths.length} package(s) successfully!`, output: output.trim() });
     });
   };
 
@@ -515,7 +612,6 @@ app.post('/api/install-apk', upload.single('apkFile'), (req, res) => {
         runInstall(files.map(f => `"${path.join(tempExtractDir, f)}"`));
       });
     } else {
-      // ไฟล์เดี่ยว .apk
       runInstall([`"${filePath}"`]);
     }
   } catch (err) {
@@ -536,12 +632,10 @@ app.get('/api/get-installed-apps', (req, res) => {
   const device = getTvDevice(targetIp, targetPort);
   let flag = appType === 'system' ? '-s' : appType === 'all' ? '' : '-3';
 
-  exec(`adb connect ${device.target}`, { timeout: 3000 }, () => {
-    exec(`adb -s ${device.target} shell pm list packages ${flag}`, { timeout: 5000 }, (cmdErr, stdout, stderr) => {
-      if (cmdErr) return res.status(500).json({ error: 'Failed', details: stderr || cmdErr.message });
-      const packages = stdout.trim().split('\n').map(line => line.replace(/^package:/, '').trim()).filter(line => line.length > 0);
-      res.json({ ip: targetIp, port: device.port, type: appType, total: packages.length, packages });
-    });
+  exec(`adb -s ${device.target} shell pm list packages ${flag}`, { timeout: 5000 }, (cmdErr, stdout, stderr) => {
+    if (cmdErr) return res.status(500).json({ error: 'Failed', details: stderr || cmdErr.message });
+    const packages = stdout.trim().split('\n').map(line => line.replace(/^package:/, '').trim()).filter(line => line.length > 0);
+    res.json({ ip: targetIp, port: device.port, type: appType, total: packages.length, packages });
   });
 });
 
@@ -553,34 +647,27 @@ app.get('/api/get-app-version', (req, res) => {
 
   const device = getTvDevice(targetIp, targetPort);
   const pkgList = pkgNamesStr.split(',');
+  let foundVersion = 'Not Installed';
+  let matchedPkg = pkgList[0];
+  let count = 0;
 
-  exec(`adb connect ${device.target}`, { timeout: 3000 }, () => {
-    let foundVersion = 'Not Installed';
-    let matchedPkg = pkgList[0];
-    let count = 0;
-
-    pkgList.forEach((pkg) => {
-      exec(`adb -s ${device.target} shell dumpsys package ${pkg.trim()}`, { timeout: 4000 }, (err, stdout) => {
-        count++;
-        if (!err && stdout) {
-          const match = stdout.match(/versionName=([^\s]+)/);
-          if (match && match[1]) {
-            foundVersion = match[1];
-            matchedPkg = pkg.trim();
-          }
+  pkgList.forEach((pkg) => {
+    exec(`adb -s ${device.target} shell dumpsys package ${pkg.trim()}`, { timeout: 4000 }, (err, stdout) => {
+      count++;
+      if (!err && stdout) {
+        const match = stdout.match(/versionName=([^\s]+)/);
+        if (match && match[1]) {
+          foundVersion = match[1];
+          matchedPkg = pkg.trim();
         }
-        if (count === pkgList.length) {
-          res.json({ ip: targetIp, port: device.port, package: matchedPkg, versionName: foundVersion });
-        }
-      });
+      }
+      if (count === pkgList.length) {
+        res.json({ ip: targetIp, port: device.port, package: matchedPkg, versionName: foundVersion });
+      }
     });
   });
 });
 
-const APK_REPO_DIR = path.join(__dirname, 'apk-repo');
-const VERSIONS_FILE = path.join(APK_REPO_DIR, 'versions.json');
-
-// API ตรวจสอบอัปเดต โดยเทียบเวอร์ชันบนกล่องกับคลัง APK บนเซิร์ฟเวอร์
 app.get('/api/check-app-updates', (req, res) => {
   const targetIp = req.query.ip;
   const targetPort = req.query.port;
@@ -598,39 +685,36 @@ app.get('/api/check-app-updates', (req, res) => {
     return res.json({ ip: targetIp, port: device.port, apps: [] });
   }
 
-  exec(`adb connect ${device.target}`, { timeout: 3000 }, () => {
-    let checkedCount = 0;
-    const results = [];
+  let checkedCount = 0;
+  const results = [];
 
-    repoVersions.forEach(appItem => {
-      exec(`adb -s ${device.target} shell dumpsys package ${appItem.package}`, { timeout: 4000 }, (err, stdout) => {
-        checkedCount++;
-        let installedVersion = 'Not Installed';
-        if (!err && stdout) {
-          const match = stdout.match(/versionName=([^\s]+)/);
-          if (match && match[1]) installedVersion = match[1];
-        }
+  repoVersions.forEach(appItem => {
+    exec(`adb -s ${device.target} shell dumpsys package ${appItem.package}`, { timeout: 4000 }, (err, stdout) => {
+      checkedCount++;
+      let installedVersion = 'Not Installed';
+      if (!err && stdout) {
+        const match = stdout.match(/versionName=([^\s]+)/);
+        if (match && match[1]) installedVersion = match[1];
+      }
 
-        const hasUpdate = installedVersion !== appItem.latestVersion && installedVersion !== 'Not Installed';
-        const apkPath = path.join(APK_REPO_DIR, appItem.apkFileName);
-        const apkReady = fs.existsSync(apkPath);
+      const hasUpdate = installedVersion !== appItem.latestVersion && installedVersion !== 'Not Installed';
+      const apkPath = path.join(APK_REPO_DIR, appItem.apkFileName);
+      const apkReady = fs.existsSync(apkPath);
 
-        results.push({
-          ...appItem,
-          installedVersion,
-          hasUpdate,
-          apkReady
-        });
-
-        if (checkedCount === repoVersions.length) {
-          res.json({ ip: targetIp, port: device.port, apps: results });
-        }
+      results.push({
+        ...appItem,
+        installedVersion,
+        hasUpdate,
+        apkReady
       });
+
+      if (checkedCount === repoVersions.length) {
+        res.json({ ip: targetIp, port: device.port, apps: results });
+      }
     });
   });
 });
 
-// API สั่งติดตั้งอัปเดตจาก APK ในคลังเซิร์ฟเวอร์ (รองรับทั้งไฟล์เดี่ยว, โฟลเดอร์, และไฟล์ .zip / .xapk / .apks)
 app.post('/api/apply-app-update', (req, res) => {
   const { ip, port, apkFileName } = req.body;
   if (!ip || !apkFileName) return res.status(400).json({ error: 'IP and APK target required' });
@@ -651,37 +735,33 @@ app.post('/api/apply-app-update', (req, res) => {
       ? `adb -s ${device.target} install-multiple -r -d -g ${apkPaths.join(' ')}`
       : `adb -s ${device.target} install -r -d -g ${apkPaths[0]}`;
 
-    exec(`adb connect ${device.target}`, { timeout: 3000 }, () => {
-      exec(installCmd, { timeout: 180000 }, (err, stdout, stderr) => {
-        if (tempExtractDir && fs.existsSync(tempExtractDir)) {
-          exec(`rm -rf "${tempExtractDir}"`);
-        }
+    exec(installCmd, { timeout: 180000 }, (err, stdout, stderr) => {
+      if (tempExtractDir && fs.existsSync(tempExtractDir)) {
+        exec(`rm -rf "${tempExtractDir}"`);
+      }
 
-        const output = (stdout || '') + (stderr || '');
-        if (err || !output.includes('Success')) {
-          return res.status(500).json({
-            error: 'Installation failed',
-            details: output.trim() || err.message
-          });
-        }
-
-        res.json({
-          success: true,
-          message: `Installed ${apkPaths.length} package(s) successfully!`,
-          output: output.trim()
+      const output = (stdout || '') + (stderr || '');
+      if (err || !output.includes('Success')) {
+        return res.status(500).json({
+          error: 'Installation failed',
+          details: output.trim() || err.message
         });
+      }
+
+      res.json({
+        success: true,
+        message: `Installed ${apkPaths.length} package(s) successfully!`,
+        output: output.trim()
       });
     });
   };
 
   try {
     if (stat.isDirectory()) {
-      // 1. กรณีเป็นโฟลเดอร์ Split APKs
       const files = fs.readdirSync(targetPath).filter(f => f.endsWith('.apk'));
       if (files.length === 0) return res.status(400).json({ error: 'No .apk files found in directory' });
       runInstallation(files.map(f => `"${path.join(targetPath, f)}"`));
     } else if (apkFileName.endsWith('.zip') || apkFileName.endsWith('.xapk') || apkFileName.endsWith('.apks')) {
-      // 2. กรณีเป็นไฟล์บีบอัด (.zip / .xapk / .apks) ใช้ unzip ของ Linux
       tempExtractDir = path.join(UPLOAD_DIR, 'temp-split-' + Date.now());
       fs.mkdirSync(tempExtractDir, { recursive: true });
 
@@ -700,7 +780,6 @@ app.post('/api/apply-app-update', (req, res) => {
         runInstallation(files.map(f => `"${path.join(tempExtractDir, f)}"`));
       });
     } else {
-      // 3. กรณีเป็นไฟล์ .apk เดี่ยว
       runInstallation([`"${targetPath}"`]);
     }
   } catch (error) {
@@ -712,18 +791,125 @@ app.post('/api/apply-app-update', (req, res) => {
 });
 
 // ==========================================
-// SCREEN CAPTURE & REMOTE CONTROL
+// SCRCPY LIVE STREAMING ENGINE
+// ==========================================
+
+const activeScrcpySessions = new Map();
+
+function startScrcpyStream(ws, ip, port) {
+  const device = getTvDevice(ip, port);
+  const target = device.target;
+  const localPort = 27183 + Math.floor(Math.random() * 1000);
+
+  stopScrcpyStream(ws);
+
+  exec(`adb -s ${target} push "${SCRCPY_PATH}" /data/local/tmp/scrcpy-server.jar`, (pushErr) => {
+    if (pushErr) return ws.send(JSON.stringify({ action: 'SCRCPY_ERROR', message: 'Failed to push scrcpy-server' }));
+
+    exec(`adb -s ${target} forward tcp:${localPort} localabstract:scrcpy`, (fwdErr) => {
+      if (fwdErr) return ws.send(JSON.stringify({ action: 'SCRCPY_ERROR', message: 'ADB forward failed' }));
+
+      const scrcpyProcess = spawn('adb', [
+        '-s', target,
+        'shell',
+        'CLASSPATH=/data/local/tmp/scrcpy-server.jar',
+        'app_process', '/',
+        'com.genymobile.scrcpy.Server',
+        '2.4',
+        'max_size=960',
+        'max_fps=20',
+        'video_bit_rate=1500000',
+        'tunnel_forward=true',
+        'audio=false',
+        'control=false',
+        'send_dummy_byte=true'
+      ]);
+
+      let socket = null;
+      let isConnected = false;
+
+      const connectSocket = () => {
+        socket = new net.Socket();
+        socket.connect(localPort, '127.0.0.1', () => {
+          isConnected = true;
+          ws.send(JSON.stringify({ action: 'SCRCPY_STARTED', target }));
+        });
+
+        socket.on('data', (chunk) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(chunk);
+          }
+        });
+
+        socket.on('error', () => {
+          if (!isConnected) setTimeout(connectSocket, 300);
+        });
+
+        socket.on('close', () => {
+          stopScrcpyStream(ws);
+        });
+      };
+
+      setTimeout(connectSocket, 500);
+      activeScrcpySessions.set(ws, { process: scrcpyProcess, socket, localPort, target });
+    });
+  });
+}
+
+function stopScrcpyStream(ws) {
+  const session = activeScrcpySessions.get(ws);
+  if (session) {
+    if (session.socket) session.socket.destroy();
+    if (session.process) session.process.kill();
+    exec(`adb -s ${session.target} forward --remove tcp:${session.localPort}`, () => {});
+    activeScrcpySessions.delete(ws);
+  }
+}
+
+// ==========================================
+// FAST SCREEN CAPTURE (PULL / RAW / DIRECT)
 // ==========================================
 
 function captureScreen(ip, port) {
   return new Promise((resolve, reject) => {
     const device = getTvDevice(ip, port);
-    // ขยาย maxBuffer เป็น 20MB และตั้ง timeout 4500ms ป้องกัน SurfaceFlinger ค้างขณะเล่น Stream
-    exec(`adb -s ${device.target} exec-out screencap -p`, { encoding: 'buffer', maxBuffer: 20 * 1024 * 1024, timeout: 4500 }, (err, stdout) => {
-      if (err || !stdout || stdout.length < 1000) {
-        return reject(err || new Error('Capture failed or empty frame'));
+    const target = device.target;
+    const tempRemote = `/sdcard/screen_snap.png`;
+    const tempLocal = path.join(UPLOAD_DIR, `snap_${Date.now()}_${Math.random().toString(36).substring(7)}.png`);
+
+    // วิธีหลัก: บันทึกลง /sdcard/ แล้วดึงภาพ (รองรับทั้ง Sharp/MStar/Panasonic)
+    const cmd = `adb -s ${target} shell "screencap -p ${tempRemote}" && adb -s ${target} pull ${tempRemote} "${tempLocal}" && adb -s ${target} shell "rm -f ${tempRemote}"`;
+
+    exec(cmd, { timeout: 4000 }, (err) => {
+      if (!err && fs.existsSync(tempLocal)) {
+        try {
+          const imgBuffer = fs.readFileSync(tempLocal);
+          fs.unlink(tempLocal, () => {});
+
+          if (imgBuffer && imgBuffer.length > 1000 && imgBuffer[0] === 0x89 && imgBuffer[1] === 0x50) {
+            return resolve(`data:image/png;base64,${imgBuffer.toString('base64')}`);
+          }
+        } catch (readErr) {
+          fs.unlink(tempLocal, () => {});
+        }
       }
-      resolve(`data:image/png;base64,${stdout.toString('base64')}`);
+
+      // Fallback 1: exec-out screencap -p
+      exec(`adb -s ${target} exec-out "screencap -p"`, { encoding: 'buffer', maxBuffer: 20 * 1024 * 1024, timeout: 3500 }, (err2, stdout) => {
+        if (!err2 && stdout && stdout.length > 1000 && stdout[0] === 0x89 && stdout[1] === 0x50) {
+          return resolve(`data:image/png;base64,${stdout.toString('base64')}`);
+        }
+
+        // Fallback 2: /data/local/tmp พร้อมปิด SurfaceFlinger Overlays
+        const tempLocalTmp = `/data/local/tmp/snap_tmp_${Date.now()}.png`;
+        const cmdOverlay = `adb -s ${target} shell "service call SurfaceFlinger 1008 i32 1 && screencap -p ${tempLocalTmp}" && adb -s ${target} exec-out "cat ${tempLocalTmp}" && adb -s ${target} shell "rm -f ${tempLocalTmp}"`;
+        exec(cmdOverlay, { encoding: 'buffer', maxBuffer: 20 * 1024 * 1024, timeout: 4500 }, (err3, stdout2) => {
+          if (!err3 && stdout2 && stdout2.length > 1000 && stdout2[0] === 0x89 && stdout2[1] === 0x50) {
+            return resolve(`data:image/png;base64,${stdout2.toString('base64')}`);
+          }
+          reject(err || err2 || err3 || new Error('Screen capture failed'));
+        });
+      });
     });
   });
 }
@@ -734,77 +920,156 @@ function broadcast(data) {
   });
 }
 
+// ==========================================
+// TCP SOCKET CHECK (NO ADB CONNECT SPAM)
+// ==========================================
+
 function checkTvStatus(ip, port) {
   return new Promise((resolve) => {
-    const targetPort = port || '5555';
+    const targetPort = parseInt(port || '5555', 10);
     const target = `${ip}:${targetPort}`;
+    const socket = new net.Socket();
+    let isSettled = false;
 
-    exec(`adb devices`, { timeout: 1500 }, (devErr, devStdout) => {
-      const devicesOutput = devStdout || '';
-      if (devicesOutput.includes(`${target}\tdevice`)) {
-        return resolve({ ip, port: targetPort, target, status: 'online' });
-      }
-      if (devicesOutput.includes(`${target}\tunauthorized`)) {
-        return resolve({ ip, port: targetPort, target, status: 'offline' });
-      }
+    socket.setTimeout(1200);
 
-      exec(`adb connect ${target}`, { timeout: 2000 }, (connErr, connStdout) => {
-        const output = (connStdout || '').trim();
-        if (output.includes('connected to') || output.includes('already connected')) {
-          resolve({ ip, port: targetPort, target, status: 'online' });
-        } else {
-          resolve({ ip, port: targetPort, target, status: 'offline' });
-        }
-      });
+    socket.on('connect', () => {
+      if (!isSettled) {
+        isSettled = true;
+        socket.destroy();
+
+        // ตรวจสอบสถานะ adb devices ปัจจุบันโดยไม่ส่งคำสั่ง connect ไปขึ้น Pop-up
+        exec('adb devices', { timeout: 1000 }, (err, stdout) => {
+          const out = stdout || '';
+          let adbState = 'not_connected';
+          if (out.includes(`${target}\tdevice`)) adbState = 'connected';
+          else if (out.includes(`${target}\tunauthorized`)) adbState = 'unauthorized';
+
+          resolve({ ip, port: String(targetPort), target, status: 'online', adbState });
+        });
+      }
     });
+
+    socket.on('timeout', () => {
+      if (!isSettled) {
+        isSettled = true;
+        socket.destroy();
+        resolve({ ip, port: String(targetPort), target, status: 'offline', adbState: 'disconnected' });
+      }
+    });
+
+    socket.on('error', () => {
+      if (!isSettled) {
+        isSettled = true;
+        socket.destroy();
+        resolve({ ip, port: String(targetPort), target, status: 'offline', adbState: 'disconnected' });
+      }
+    });
+
+    socket.connect(targetPort, ip);
   });
 }
 
 async function pollTvStatuses() {
   const tvs = readDatabase();
   if (!tvs || tvs.length === 0) return;
-  
+
   const results = [];
   for (const tv of tvs) {
     try {
       const res = await checkTvStatus(tv.ip, tv.port);
       results.push(res);
     } catch (e) {
-      results.push({ ip: tv.ip, port: tv.port || '5555', status: 'offline' });
+      results.push({ ip: tv.ip, port: tv.port || '5555', target: `${tv.ip}:${tv.port || '5555'}`, status: 'offline', adbState: 'disconnected' });
     }
   }
-  if (typeof broadcast === 'function') broadcast({ action: 'STATUS_UPDATE', statuses: results });
+  broadcast({ action: 'STATUS_UPDATE', statuses: results });
 }
 
-setInterval(pollTvStatuses, 60000);
+setInterval(pollTvStatuses, 30000);
+
+// ==========================================
+// WEBSOCKET INTERACTION & REMOTE CONTROL
+// ==========================================
 
 wss.on('connection', (ws) => {
   pollTvStatuses();
 
+  ws.on('close', () => {
+    stopScrcpyStream(ws);
+  });
+
   ws.on('message', async (message) => {
     let data;
     try { data = JSON.parse(message); } catch (e) { return; }
-    
+
     const { action, ip, port } = data;
-    if (!ip && action !== 'CHECK_ALL_STATUS') return;
+
+    if (action === 'START_SCRCPY') {
+      return startScrcpyStream(ws, ip, port);
+    }
+    if (action === 'STOP_SCRCPY') {
+      return stopScrcpyStream(ws);
+    }
+    if (action === 'CHECK_ALL_STATUS') {
+      return await pollTvStatuses();
+    }
+
+    if (!ip) return;
 
     const device = getTvDevice(ip, port);
     const target = device.target;
 
     try {
       switch (action) {
-        case 'CHECK_ALL_STATUS':
-          await pollTvStatuses();
+        case 'CONNECT_ADB': {
+          exec(`adb connect ${target}`, { timeout: 4000 }, (err, stdout, stderr) => {
+            const out = ((stdout || '') + (stderr || '')).trim();
+            const isOk = out.includes('connected to') || out.includes('already connected');
+            ws.send(JSON.stringify({
+              action: 'CONNECT_ADB_RESULT',
+              ip,
+              port: device.port,
+              success: isOk,
+              message: out
+            }));
+            pollTvStatuses();
+          });
           break;
+        }
+
+        case 'DISCONNECT_ADB': {
+          exec(`adb disconnect ${target}`, { timeout: 3000 }, (err, stdout, stderr) => {
+            const out = ((stdout || '') + (stderr || '')).trim();
+            ws.send(JSON.stringify({
+              action: 'DISCONNECT_ADB_RESULT',
+              ip,
+              port: device.port,
+              success: true,
+              message: out
+            }));
+            pollTvStatuses();
+          });
+          break;
+        }
+
         case 'CAPTURE_SCREEN': {
           try {
             const imgData = await captureScreen(ip, port);
-            ws.send(JSON.stringify({ status: 'success', action: 'SCREEN_FRAME', ip, port: device.port, image: imgData }));
+            ws.send(JSON.stringify({
+              status: 'success',
+              action: 'SCREEN_FRAME',
+              ip,
+              port: device.port,
+              image: imgData,
+              timestamp: new Date().toLocaleTimeString()
+            }));
           } catch (err) {
             ws.send(JSON.stringify({ status: 'error', action: 'SCREEN_FRAME', ip, port: device.port, message: err.message }));
           }
           break;
         }
+
         case 'TAP':
           exec(`adb -s ${target} shell input tap ${data.x} ${data.y}`);
           break;
@@ -869,7 +1134,7 @@ wss.on('connection', (ws) => {
           break;
         case 'WAKEUP_TV':
           exec(`adb -s ${target} shell input keyevent 224`, (err) => {
-            if (err) ws.send(JSON.stringify({ status: 'error', action, ip, port: device.port, message: err.message }));
+            if (err) ws.send(JSON.stringify({ status: 'error', action, ip, port: device.port, message: 'TV Woken Up' }));
             else ws.send(JSON.stringify({ status: 'success', action, ip, port: device.port, message: 'TV Woken Up' }));
           });
           break;
