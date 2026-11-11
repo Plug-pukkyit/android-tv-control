@@ -15,6 +15,7 @@ Android Platform Tools	ADB Version 30.0.0+	สำหรับสั่งกา�
 Process Manager	PM2 (Production Process Manager)	สำหรับสั่งรัน Background Service อัตโนมัติ
 
 3. การติดตั้งฝั่ง Linux Server
+
 3.1 ติดตั้งโปรแกรมและเครื่องมือจำเป็น
 # อัปเดต Package และลงเครื่องมือพื้นฐาน
 sudo apt update && sudo apt install -y curl wget unzip adb git
